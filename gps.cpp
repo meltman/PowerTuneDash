@@ -265,11 +265,7 @@ void GPS::ProcessMessage(QByteArray messageline)
     }
     // Then we process the message
     if (messageline.mid(3, 3) == "GGA") {
-        // Check if we have already set the refresh rate
-        if (rateset10hz == 0) {
-            // qDebug() << "GoTo setGPS10HZ";
-            setGPS10HZ();
-        }
+        // Generic NMEA input must not implicitly trigger receiver-specific UBX configuration.
         processGPGGA(messageline);
     }
     if (messageline.mid(3, 3) == "RMC") {
