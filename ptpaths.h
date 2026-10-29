@@ -5,15 +5,69 @@
 #include <QUrl>
 #include <QtGlobal>
 
-// Central base directory for all PowerTune data folders (UserDashboards, Logo,
-// Gauges, KTracks, maptiles, daemons, etc.).
+// Role-specific directories for the Linux runtime layout. Callers will migrate
+// to these helpers in later phases; Windows keeps the existing development
+// layout until then.
 //
-// On the Raspberry Pi (Linux) target this is /home/pi, which matches the paths
-// that used to be hardcoded throughout the codebase, so Linux behaviour is
-// unchanged. When the project is compiled on Windows (used for testing) it
-// points at C:/PowerTune instead, so the same folder layout works there.
-//
-// To use a different location on Windows just change the string below.
+// The URL helpers are for local files exposed to QML. Use QUrl to encode
+// platform-specific local-file URL syntax.
+inline QString ptResourcesPath()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:/PowerTune");
+#else
+    return QStringLiteral("/usr/share/powertune");
+#endif
+}
+
+inline QString ptDataPath()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:/PowerTune");
+#else
+    return QStringLiteral("/var/lib/powertune");
+#endif
+}
+
+inline QString ptConfigPath()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:/PowerTune");
+#else
+    return QStringLiteral("/etc/powertune");
+#endif
+}
+
+inline QString ptHelpersPath()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:/PowerTune");
+#else
+    return QStringLiteral("/usr/libexec/powertune");
+#endif
+}
+
+inline QString ptLogsPath()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:/PowerTune");
+#else
+    return QStringLiteral("/var/log/powertune");
+#endif
+}
+
+inline QString ptResourcesUrl()
+{
+    return QUrl::fromLocalFile(ptResourcesPath()).toString();
+}
+
+inline QString ptDataUrl()
+{
+    return QUrl::fromLocalFile(ptDataPath()).toString();
+}
+
+// Legacy compatibility API. Runtime callers remain on this path until later
+// migration phases; do not use for new path lookups.
 inline QString ptBasePath()
 {
 #ifdef Q_OS_WIN
@@ -23,9 +77,8 @@ inline QString ptBasePath()
 #endif
 }
 
-// Same base directory expressed as a file:// URL, handy for QML image sources.
-//   Linux:   file:///home/pi
-//   Windows: file:///C:/PowerTune
+// Legacy compatibility API for QML/local-file URLs. Kept in sync with
+// ptBasePath() until existing callers are migrated.
 inline QString ptBaseUrl()
 {
     return QUrl::fromLocalFile(ptBasePath()).toString();
