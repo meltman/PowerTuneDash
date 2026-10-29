@@ -1,5 +1,6 @@
 #include <QDebug>
 #include <QByteArrayMatcher>
+#include <QDir>
 #include <QTime>
 #include <QTimer>
 
@@ -278,10 +279,15 @@ void GPS::ProcessMessage(QByteArray messageline)
 
 void GPS::logNMEA(const QString & line){
     // Check if a log file for today already exists
-    QString logfile = QString("%1/%2.nmea").arg(ptBasePath()).arg(QDate::currentDate().toString("yyyyMMdd"));
+    const QString logDirectory = ptLogsPath();
+    if (!QDir().mkpath(logDirectory)) {
+        qWarning() << "Could not create NMEA log directory" << logDirectory;
+        return;
+    }
+    QString logfile = QString("%1/%2.nmea").arg(logDirectory).arg(QDate::currentDate().toString("yyyyMMdd"));
     QFile file(logfile);
     if (!file.open(QIODevice::Append)) {
-        // qDebug() << "Could not open log file" << logfile;
+        qWarning() << "Could not open NMEA log file" << logfile << file.errorString();
         return;
     }
     QTextStream out(&file);
