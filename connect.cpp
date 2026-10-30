@@ -219,8 +219,7 @@ void Connect::readavailablebackrounds()
 void Connect::readMaindashsetup()
 {
 
-    //QString path = "MainDash.txt";//for Windows
-    QString path = QDir(ptDashboardsPath()).filePath("MainDash.txt");
+    QString path = QDir(ptDashboardsPath()).filePath(dashfilename1);
     QFile inputFile(path);
     if (inputFile.open(QIODevice::ReadOnly))
     {
@@ -232,6 +231,10 @@ void Connect::readMaindashsetup()
             m_dashBoard->setmaindashsetup(list);
         }
         inputFile.close();
+    }
+    else
+    {
+        qWarning() << "Could not open dashboard file" << path << inputFile.errorString();
     }
 
 }
