@@ -58,6 +58,7 @@ public:
     Q_INVOKABLE void readandApplySettings();
 
 private:
+    void initializeDashboardDefaults();
     void setValue(const QString &key, const QVariant &value);
     QVariant getValue(const QString &key);
     DashBoard *m_dashboard;

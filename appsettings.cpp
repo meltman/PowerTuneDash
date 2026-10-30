@@ -10,12 +10,14 @@ AppSettings::AppSettings(QObject *parent)
 
 
 {
+    initializeDashboardDefaults();
 }
 AppSettings::AppSettings(DashBoard *dashboard, QObject *parent)
     : QObject(parent)
     , m_dashboard(dashboard)
 
 {
+    initializeDashboardDefaults();
 }
 
 AppSettings::~AppSettings()
@@ -123,6 +125,32 @@ QVariant AppSettings::getValue(const QString &key)
     QSettings settings("PowerTuneQML", "PowerTuneDash", this);
     return settings.value(key);
 }
+
+void AppSettings::initializeDashboardDefaults()
+{
+    // Match the default QSettings backend used by Qt.labs.settings in QML.
+    QSettings settings;
+    const struct {
+        const char *key;
+        int value;
+    } defaults[] = {
+        {"numberofdash", 2},
+        {"dashselect1", 4},
+        {"dashselect2", 5},
+        {"dashselect3", 6},
+        {"dashselect4", 0}
+    };
+
+    for (const auto &setting : defaults) {
+        if (!settings.contains(QLatin1String(setting.key)))
+            settings.setValue(QLatin1String(setting.key), setting.value);
+    }
+
+    settings.sync();
+    if (settings.status() != QSettings::NoError)
+        qWarning() << "Unable to initialize dashboard defaults in QSettings";
+}
+
 void AppSettings::writeMainSettings()
 {
     // To be implemented later
@@ -463,4 +491,3 @@ void AppSettings::readandApplySettings()
     m_dashboard->setexternalspeedport(getValue("externalspeedport").toString());
    // qDebug() << "current speedsettings" <<m_dashboard->externalspeedconnectionrequest();
 }
-

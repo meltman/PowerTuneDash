@@ -8,6 +8,14 @@ Rectangle {
     id: dashselector
     anchors.fill: parent
     color: "grey"
+    property bool initialized: false
+
+    Component.onCompleted: {
+        initialized = true
+        if (numberofdashes.currentIndex >= 0
+                && numberofdashes.currentIndex < numberofdashes.count)
+            adremove()
+    }
 
     Settings {
         property alias dashselect1: dash1.currentIndex
@@ -71,6 +79,10 @@ Rectangle {
     }
 
     function adremove() {
+        if (numberofdashes.currentIndex < 0
+                || numberofdashes.currentIndex >= numberofdashes.count)
+            return
+
         //Setting amount of Active Dashes loaded
         Dashboard.Visibledashes = numberofdashes.currentIndex + 1
 
@@ -123,10 +135,13 @@ Rectangle {
             height: dashselector.height / 15
             font.pixelSize: dashselector.width / 55
             model: ["1", "2", "3", "4"]
-            currentIndex: -1
+            currentIndex: 2
             onCurrentIndexChanged: {
-                adremove()
-                AppSettings.writeSelectedDashSettings(numberofdashes.currentIndex + 1)
+                if (dashselector.initialized && currentIndex >= 0
+                        && currentIndex < count) {
+                    adremove()
+                    AppSettings.writeSelectedDashSettings(currentIndex + 1)
+                }
             }
 
             delegate: ItemDelegate {
