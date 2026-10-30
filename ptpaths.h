@@ -2,6 +2,7 @@
 #define PTPATHS_H
 
 #include <QString>
+#include <QDir>
 #include <QUrl>
 #include <QtGlobal>
 
@@ -27,6 +28,11 @@ inline QString ptDataPath()
 #else
     return QStringLiteral("/var/lib/powertune");
 #endif
+}
+
+inline QString ptDashboardsPath()
+{
+    return QDir(ptDataPath()).filePath(QStringLiteral("UserDashboards"));
 }
 
 inline QString ptConfigPath()

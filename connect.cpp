@@ -42,6 +42,7 @@
 #include <QQmlApplicationEngine>
 #include <QFile>
 #include <QFileInfo>
+#include <QDir>
 #include <QTextStream>
 #include <QByteArrayMatcher>
 #include <QProcess>
@@ -136,7 +137,13 @@ void Connect::saveDashtoFile(const QString &filename,const QString &dashstring)
     QString fixformat = dashstring;
     fixformat.replace(",,",", ,");
     QStringList fields = fixformat.split(QRegExp("[\r\n]"));
-    QFile file( ptBasePath() + "/UserDashboards/"+filename + ".txt" );
+    const QString dashboardsPath = ptDashboardsPath();
+    if (!QDir().mkpath(dashboardsPath))
+    {
+        qWarning() << "Could not create dashboard directory" << dashboardsPath;
+        return;
+    }
+    QFile file(QDir(dashboardsPath).filePath(filename + ".txt"));
     //QFile file(filename + ".txt" );
     file.remove(); //remove file if it exists to avoid appending of existing file
     if ( file.open(QIODevice::ReadWrite) )
@@ -194,7 +201,7 @@ void Connect::checkifraspberrypi()
 void Connect::readavailabledashfiles()
 {
     //QDir directory(""); //for Windows
-    QDir directory(ptBasePath() + "/UserDashboards");
+    QDir directory(ptDashboardsPath());
     QStringList dashfiles = directory.entryList(QStringList() << "*.txt",QDir::Files);
     m_dashBoard->setdashfiles(dashfiles);
     //qDebug() <<"files" << dashfiles ;
@@ -213,7 +220,7 @@ void Connect::readMaindashsetup()
 {
 
     //QString path = "MainDash.txt";//for Windows
-    QString path = ptBasePath() + "/UserDashboards/MainDash.txt";
+    QString path = QDir(ptDashboardsPath()).filePath("MainDash.txt");
     QFile inputFile(path);
     if (inputFile.open(QIODevice::ReadOnly))
     {
@@ -232,7 +239,7 @@ void Connect::readdashsetup3()
 {
 
     //QString path = dashfilename1;//for Windows
-    QString path = ptBasePath() + "/UserDashboards/"+dashfilename3;
+    QString path = QDir(ptDashboardsPath()).filePath(dashfilename3);
     QFile inputFile(path);
     //QStringList list;
     if (inputFile.open(QIODevice::ReadOnly))
@@ -262,7 +269,7 @@ void Connect::readdashsetup2()
 {
 
     //QString path = dashfilename1;//for Windows
-    QString path = ptBasePath() + "/UserDashboards/"+dashfilename2;
+    QString path = QDir(ptDashboardsPath()).filePath(dashfilename2);
     QFile inputFile(path);
     //QStringList list;
     if (inputFile.open(QIODevice::ReadOnly))
@@ -292,7 +299,7 @@ void Connect::readdashsetup1()
 {
 
     //QString path = dashfilename1;//for Windows
-    QString path = ptBasePath() + "/UserDashboards/"+dashfilename1;
+    QString path = QDir(ptDashboardsPath()).filePath(dashfilename1);
     QFile inputFile(path);
     //QStringList list;
     if (inputFile.open(QIODevice::ReadOnly))

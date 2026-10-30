@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QBitArray>
 #include <QByteArrayMatcher>
+#include <QDir>
 #include <QFile>
 #include <QTextStream>
 
@@ -910,7 +911,13 @@ void Apexi::writeDashfile(const QString &gauge1,const QString &gauge2,const QStr
         stream << gauge6 << endl;
     }
 
-    QString filename2=ptBasePath() + "/UserDashboards/UserDashApexi.txt";
+    const QString dashboardsPath = ptDashboardsPath();
+    if (!QDir().mkpath(dashboardsPath))
+    {
+        qWarning() << "Could not create dashboard directory" << dashboardsPath;
+        return;
+    }
+    QString filename2 = QDir(dashboardsPath).filePath("UserDashApexi.txt");
     QFile file2( filename2 );
     if ( file2.open(QIODevice::ReadWrite  | QIODevice::Truncate | QIODevice::Text) )
 
