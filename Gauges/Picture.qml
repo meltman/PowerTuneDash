@@ -11,6 +11,11 @@ Item {
     property int pictureheight
     //property int picturewidth
     property string increasedecreaseident
+    onPicturesourceChanged: {
+        var resolvedSource = Connect.resolveLogoUrl(picturesource)
+        if (resolvedSource !== picturesource)
+            picturesource = resolvedSource
+    }
     Drag.active: true
     Component.onCompleted: togglemousearea();
 
@@ -131,7 +136,7 @@ Item {
                 model: Dashboard.backroundpictures
                 currentIndex: 0
                 onCurrentIndexChanged: {
-                    picturesource = PTBaseUrl + "/Logo/" + pictureSelector.textAt(pictureSelector.currentIndex);
+                    picturesource = Connect.logoResourceUrl(pictureSelector.textAt(pictureSelector.currentIndex));
                     //picturesource = "file:" + pictureSelector.textAt(pictureSelector.currentIndex); // windows
                     mypicture.source = picturesource;
                                        }

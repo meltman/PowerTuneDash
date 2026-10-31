@@ -29,7 +29,6 @@ ApplicationWindow {
     color: "black"
 
     property int brightnessIncrease: 175
-    property int ddcUtilBrightnessIncrease: 50
 
     property int digitalInput1: Dashboard.EXDigitalInput1
     property int digitalInput2: Dashboard.EXDigitalInput2
@@ -39,16 +38,6 @@ ApplicationWindow {
     property int digitalInput6: Dashboard.EXDigitalInput6
     property int digitalInput7: Dashboard.EXDigitalInput7
     property int digitalInput8: Dashboard.EXDigitalInput8
-
-    property int lastInputState: -1 // Store previous state (-1 = undefined)
-    property bool debounceActive: false // Prevent rapid activations
-
-    Timer {
-        id: debounceTimer
-        interval: 5000 // Adjust debounce delay (in ms)
-        repeat: false
-        onTriggered: debounceActive = false
-    }
 
     //Screen Keyboard do not change !!! Behaviour between QT5.10 and QT5.15 is different
 
@@ -78,11 +67,7 @@ ApplicationWindow {
         popUpLoader.source = "qrc:/BrightnessPopUp.qml"
         custom.executeOnBootAction()
         //console.log("Max Brightness on Boot Value Check: " + custom.maxBrightnessOnBoot)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     //Screen Keyboard do not change !!! Behaviour between QT5.10 and QT5.15 is different
@@ -130,14 +115,14 @@ ApplicationWindow {
 
     Connections{
             target: Dashboard
-            onBrigtnessChanged: {
+            onBrightnessChanged: {
             brightness.value = Dashboard.Brightness
             }
     }
 
     Item {
         id: name
-        Component.onCompleted: Connect.checkifraspberrypi()
+        Component.onCompleted: Connect.initializeBrightness()
     }
 
 
@@ -231,7 +216,7 @@ ApplicationWindow {
         width: window.width * 0.15
         //anchors.verticalCenter: parent.verticalCenter
         Component.onCompleted: {
-            if(popUpLoader.enabled){
+            if(popUpLoader.enabled && Dashboard.screen){
                 visible = true
             }
            // //console.log("Brightness Loaded")
@@ -354,7 +339,7 @@ ApplicationWindow {
 
              onValueChanged: {
                       ////console.log("Slider Value Changed: " + brightness.value + " Dashboard Brightness: " + Dashboard.Brightness)
-                      Connect.setSreenbrightness(brightness.value);
+                      Connect.setBrightness(brightness.value);
                       AppSettings.writebrightnessettings(brightness.value);
                       }
              // Conditional assignment of 'from' and 'to' properties
@@ -364,14 +349,6 @@ ApplicationWindow {
                      brightness.visible = false
                  }
 
-                 // Check if HAVE_DDCUTIL is defined
-                 if (Qt.platform.os === "linux" && HAVE_DDCUTIL) {
-                     from = 0;  // Adjust based on your requirements
-                     to = 100;  // Adjust based on your requirements
-                 } else {
-                     from = 20;  // Default values if HAVE_DDCUTIL is not defined
-                     to = 255;  // Default values if HAVE_DDCUTIL is not defined
-                 }
              }
          }
      }
@@ -412,6 +389,7 @@ ApplicationWindow {
                  }
              }
              Row{
+                 visible: Dashboard.screen
                  Button {
                      id: plusBrightness
                      font.family: "Eurostile"
@@ -426,23 +404,11 @@ ApplicationWindow {
                          }
                      }
                      onClicked: {
-                         if (Qt.platform.os === "linux" && HAVE_DDCUTIL) {
-                             ddcUtilBrightnessIncrease += 25;  // increase by 10% every time button is pressed
-                             if(ddcUtilBrightnessIncrease > 75){ //if the variable goes above 100 bring it back down
-                                 ddcUtilBrightnessIncrease = 75
-                             }
-
-                             Connect.setSreenbrightness(ddcUtilBrightnessIncrease); // set the brightness with the new value
-                             AppSettings.writebrightnessettings(ddcUtilBrightnessIncrease);
-                         }else{
-                             brightnessIncrease += 50
-                             if(brightnessIncrease > 250){ //if the variable goes above 250 bring it back down
-                                 brightnessIncrease = 250
-                             }
-
-                             Connect.setSreenbrightness(brightnessIncrease); // set the brightness with the new value
-                             AppSettings.writebrightnessettings(brightnessIncrease);
-                         }
+                         if (!Connect.brightnessSupported())
+                             return;
+                         brightnessIncrease = Math.min(brightnessIncrease + 50, 250)
+                         Connect.setBrightness(brightnessIncrease);
+                         AppSettings.writebrightnessettings(brightnessIncrease);
                      }
                      background: Rectangle {
                                  //color: "red"
@@ -463,6 +429,7 @@ ApplicationWindow {
                  }
 
              Row{
+                 visible: Dashboard.screen
                  Button {
                      id: minusBrightness
                      font.family: "Eurostile"
@@ -478,23 +445,11 @@ ApplicationWindow {
                      }
 
                      onClicked: {
-                         if (Qt.platform.os === "linux" && HAVE_DDCUTIL) {
-                             ddcUtilBrightnessIncrease -= 25;  // increase by 10% every time button is pressed
-                             if(ddcUtilBrightnessIncrease < 0){ //if the variable goes above 100 bring it back down
-                                 ddcUtilBrightnessIncrease = 0
-                             }
-
-                             Connect.setSreenbrightness(ddcUtilBrightnessIncrease); // set the brightness with the new value
-                             AppSettings.writebrightnessettings(ddcUtilBrightnessIncrease);
-                         }else{
-                             brightnessIncrease -= 50
-                             if(brightnessIncrease < 25){ //if the variable goes above 250 bring it back down
-                                 brightnessIncrease = 25
-                             }
-
-                             Connect.setSreenbrightness(brightnessIncrease); // set the brightness with the new value
-                             AppSettings.writebrightnessettings(brightnessIncrease);
-                         }
+                         if (!Connect.brightnessSupported())
+                             return;
+                         brightnessIncrease = Math.max(brightnessIncrease - 50, 25)
+                         Connect.setBrightness(brightnessIncrease);
+                         AppSettings.writebrightnessettings(brightnessIncrease);
                      }
                      background: Rectangle {
                          radius: window.width / 10
@@ -550,6 +505,7 @@ ApplicationWindow {
 
                 Switch {
                     id: disablePopUp
+                    enabled: Dashboard.screen
                     text:  "On"
                     //leftPadding: 40
                     font.family: "Eurostile"
@@ -564,7 +520,7 @@ ApplicationWindow {
                             //disablePopUp.leftPadding = 70
                         }
 
-                        if(popUpLoader.enabled){
+                        if(popUpLoader.enabled && Dashboard.screen){
                             disablePopUp.text = "On"
                         }else{
                            disablePopUp.text = "Off"
@@ -574,7 +530,7 @@ ApplicationWindow {
                         popUpLoader.enabled = !popUpLoader.enabled;
                         appSettings.sampleActionEnabled = popUpLoader.enabled //setValue
                         popUpLoader.visible = false
-                        if(popUpLoader.enabled){
+                        if(popUpLoader.enabled && Dashboard.screen){
                             disablePopUp.text = "On"
                             ////console.log("Pop Up Enabled")
                         }else{
@@ -612,11 +568,7 @@ ApplicationWindow {
         }
 
        // //console.log("Digital Input 1 Channel Changed" + digitalInput1)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput2Changed: {
@@ -624,11 +576,7 @@ ApplicationWindow {
             return;
         }
         ////console.log("Digital Input 2 Channel Changed" + digitalInput2)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput3Changed: {
@@ -636,11 +584,7 @@ ApplicationWindow {
             return;
         }
         //console.log("Digital Input 3 Channel Changed" + digitalInput3)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput4Changed: {
@@ -648,11 +592,7 @@ ApplicationWindow {
             return;
         }
         //console.log("Digital Input 4 Channel Changed" + digitalInput4)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput5Changed: {
@@ -660,11 +600,7 @@ ApplicationWindow {
             return;
         }
         //console.log("Digital Input 5 Channel Changed" + digitalInput5)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput6Changed: {
@@ -672,11 +608,7 @@ ApplicationWindow {
             return;
         }
         //console.log("Digital Input 6 Channel Changed" + digitalInput6)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput7Changed: {
@@ -684,11 +616,7 @@ ApplicationWindow {
             return;
         }
         //console.log("Digital Input 7 Channel Changed" + digitalInput7)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     onDigitalInput8Changed: {
@@ -696,11 +624,7 @@ ApplicationWindow {
             return;
         }
         //console.log("Digital Input 8 Channel Changed" + digitalInput8)
-        if(Qt.platform.os === "linux" && HAVE_DDCUTIL){
-            ddcutilDigitalLoop()
-        }else{
-            digitalLoop()
-        }
+        digitalLoop()
     }
 
     Timer {
@@ -709,15 +633,8 @@ ApplicationWindow {
       onTriggered: {
             if(custom.maxBrightnessOnBoot == 1){
                 //console.log("Timer for Max Brightness started")
-                if (Qt.platform.os === "linux" && HAVE_DDCUTIL) {
-                  //console.log("Max Brightness on Boot Run" + custom.maxBrightnessOnBoot)
-                  Connect.setSreenbrightness(75);
-                  AppSettings.writebrightnessettings(75);
-                } else {
-                  //console.log("DDCUTIL Failed max brightness run without ddc " + custom.maxBrightnessOnBoot)
-                  Connect.setSreenbrightness(250);
-                  AppSettings.writebrightnessettings(250);
-                }
+                Connect.setBrightness(250);
+                AppSettings.writebrightnessettings(250);
             }
         }
     }
@@ -727,6 +644,7 @@ ApplicationWindow {
         const BRIGHTNESS_OFF = 0;
 
         if (custom.maxBrightnessOnBoot !== 1) return; // Exit early if maxBrightnessOnBoot is not active.
+        if (!Connect.brightnessSupported()) return;
 
         // Dynamically get the relevant digitalInput based on digiValue
         const digitalInputs = [digitalInput1, digitalInput2, digitalInput3, digitalInput4,
@@ -735,54 +653,14 @@ ApplicationWindow {
 
         if (currentInput === 1) {
             // If the input is HIGH, set brightness to OFF
-            Connect.setSreenbrightness(BRIGHTNESS_OFF);
+            Connect.setBrightness(BRIGHTNESS_OFF);
             AppSettings.writebrightnessettings(BRIGHTNESS_OFF);
             //console.log(`Brightness Set to 0 for Input ${custom.digiValue + 1}`);
         } else if (currentInput === 0) {
             // If the input is LOW, set brightness to ON
-            Connect.setSreenbrightness(BRIGHTNESS_ON);
-            AppSettings.writebrightnessettings(BRIGHTNESS_ON);
-            //console.log(`Brightness Set to ${BRIGHTNESS_ON} for Input ${custom.digiValue + 1}`);
-        }
-    }
-
-
-
-    function ddcutilDigitalLoop() {
-        const BRIGHTNESS_ON = 60;
-        const BRIGHTNESS_OFF = 0;
-
-
-        if (custom.maxBrightnessOnBoot !== 1) return; // Exit early if maxBrightnessOnBoot is not active.
-
-        // Dynamically get the relevant digitalInput based on digiValue
-        const digitalInputs = [digitalInput1, digitalInput2, digitalInput3, digitalInput4,
-                               digitalInput5, digitalInput6, digitalInput7, digitalInput8];
-        const currentInput = digitalInputs[custom.digiValue];
-
-        // ✅ Debugging logs to see what's happening
-        console.log("Selected Input Index:", custom.digiValue);
-        console.log("Selected Input State:", currentInput);
-
-        // If debounce is active or input hasn't changed, return early
-        if (debounceActive || currentInput === lastInputState) return;
-
-        lastInputState = currentInput; // Update last known state
-        debounceActive = true; // Activate debounce
-        debounceTimer.restart(); // Start debounce timer
-
-        if (currentInput === 1) {
-            // If the input is HIGH, set brightness to OFF
-            Connect.setSreenbrightness(BRIGHTNESS_OFF);
-            AppSettings.writebrightnessettings(BRIGHTNESS_OFF);
-            //console.log(`Brightness Set to 0 for Input ${custom.digiValue + 1}`);
-        } else if (currentInput === 0) {
-            // If the input is LOW, set brightness to ON
-            Connect.setSreenbrightness(BRIGHTNESS_ON);
+            Connect.setBrightness(BRIGHTNESS_ON);
             AppSettings.writebrightnessettings(BRIGHTNESS_ON);
             //console.log(`Brightness Set to ${BRIGHTNESS_ON} for Input ${custom.digiValue + 1}`);
         }
     }
     }
-
-

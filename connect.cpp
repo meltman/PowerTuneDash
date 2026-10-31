@@ -59,6 +59,28 @@ QString dashfilename1;
 QString dashfilename2;
 QString dashfilename3;
 
+namespace {
+
+QString sysfsBacklightBrightnessPath()
+{
+#ifdef Q_OS_LINUX
+    const QDir backlightDirectory(QStringLiteral("/sys/class/backlight"));
+    const QStringList devices = backlightDirectory.entryList(
+        QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const QString &device : devices) {
+        const QString path = backlightDirectory.filePath(
+            device + QStringLiteral("/brightness"));
+        const QFileInfo info(path);
+        if (info.exists() && info.isFile() && info.isReadable() && info.isWritable()) {
+            return path;
+        }
+    }
+#endif
+    return QString();
+}
+
+}
+
 Connect::Connect(QObject *parent) :
     QObject(parent),
     m_serialport(Q_NULLPTR),
@@ -171,32 +193,66 @@ void Connect::setrpm(const int &dash1,const int &dash2,const int &dash3)
     m_dashBoard->setrpmstyle2(dash2);
     m_dashBoard->setrpmstyle3(dash3);
 }
-void Connect::checkifraspberrypi()
+bool Connect::initializeBrightness()
 {
-    QString path = "/sys/class/backlight/rpi_backlight/brightness";
-    QFile inputFile(path);
-
-    if (inputFile.open(QIODevice::ReadOnly))
-    {
-        QTextStream in(&inputFile);
-            QString line = in.readLine();
-            bool ok;
-            int val = line.toInt(&ok);
-           // qDebug() <<"Bright " << val ;
-            m_dashBoard->setBrightness(val);
-        inputFile.close();
-    }
-    if (QFileInfo::exists(path))
-    {
-        m_dashBoard->setscreen(true);
-    }
-    else
-    {
+    const QString path = sysfsBacklightBrightnessPath();
+    if (path.isEmpty()) {
         m_dashBoard->setscreen(false);
+        return false;
     }
-    #ifdef HAVE_DDCUTIL
-       m_dashBoard->setscreen(true);
-    #endif
+
+    QFile inputFile(path);
+    if (!inputFile.open(QIODevice::ReadOnly)) {
+        m_dashBoard->setscreen(false);
+        return false;
+    }
+
+    bool ok = false;
+    const int value = inputFile.readAll().trimmed().toInt(&ok);
+    if (!ok) {
+        m_dashBoard->setscreen(false);
+        return false;
+    }
+
+    m_dashBoard->setBrightness(value);
+    m_dashBoard->setscreen(true);
+    return true;
+}
+
+bool Connect::brightnessSupported() const
+{
+    return !sysfsBacklightBrightnessPath().isEmpty();
+}
+
+bool Connect::setBrightness(int brightness)
+{
+    const QString path = sysfsBacklightBrightnessPath();
+    if (path.isEmpty()) {
+        return false;
+    }
+
+    QFile outputFile(path);
+    if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        return false;
+    }
+
+    const QByteArray value = QByteArray::number(brightness);
+    return outputFile.write(value) == value.size() && outputFile.flush();
+}
+
+QString Connect::resolveLogoUrl(const QString &resource) const
+{
+    return ptResolveLogoUrl(resource);
+}
+
+QString Connect::logoResourceUrl(const QString &fileName) const
+{
+    if (fileName == QStringLiteral("None") || fileName == QStringLiteral("/Logo")) {
+        return fileName;
+    }
+
+    const QFileInfo fileInfo(QDir(ptLogoPath()).filePath(fileName));
+    return fileInfo.exists() && fileInfo.isFile() ? ptLogoFileUrl(fileName) : QString();
 }
 void Connect::readavailabledashfiles()
 {
@@ -210,7 +266,7 @@ void Connect::readavailabledashfiles()
 void Connect::readavailablebackrounds()
 {
     //QDir directory(""); //for Windows
-    QDir directory(ptBasePath() + "/Logo");
+    QDir directory(ptLogoPath());
     QStringList dashfiles = directory.entryList(QStringList() << "*.png" << "*.gif",QDir::Files);
     dashfiles.prepend("None");
     m_dashBoard->setbackroundpictures(dashfiles);
@@ -329,24 +385,6 @@ void Connect::readdashsetup1()
 
 }
 
-void Connect::setSreenbrightness(const int &brightness)
-{
-#ifdef HAVE_DDCUTIL
-    // Adjust brightness using ddcutil
-    QString brightnessCommand = QString("ddcutil setvcp 10 %1 12 %1 13 %1").arg(brightness);
-    QProcess::execute(brightnessCommand);
-
-#else
-    // Use standard interface
-    QFile f("/sys/class/backlight/rpi_backlight/brightness");
-    // f.close();
-    f.open(QIODevice::WriteOnly | QIODevice::Truncate);
-    QTextStream out(&f);
-    out << brightness;
-    // qDebug() << brightness;
-    f.close();
-#endif
-}
 void Connect::setSpeedUnits(const int &units1)
 {
     switch (units1)

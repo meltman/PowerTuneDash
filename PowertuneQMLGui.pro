@@ -5,10 +5,6 @@ QT += qml quick serialport serialbus network charts location positioning sensors
 CONFIG += c++11
 
 # QMAKE_LFLAGS += -static
-# Check for the existence of ddcutil headers
-exists(/usr/lib/libddcutil.so.4) {
-    DEFINES += HAVE_DDCUTIL
-}
 static {
     QT += svg
     QTPLUGIN += qtvirtualkeyboardplugin
@@ -76,5 +72,4 @@ DISTFILES += \
     KTracks/Australia/stupid2.txt \
     KTracks/Australia/stupid3.txt \
     KTracks/Australia/stupid4.txt
-
 

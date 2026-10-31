@@ -113,17 +113,9 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("Connect", new Connect(&engine));
     engine.rootContext()->setContextProperty("Extender2",new Extender(&engine));
 
-    // Base directory for PowerTune data folders (Logo, UserDashboards, maptiles, ...).
-    // Linux -> /home/pi, Windows -> C:/PowerTune. See ptpaths.h.
-    // PTBasePath is a plain filesystem path; PTBaseUrl is the file:// URL form.
+    // PTBasePath and PTBaseUrl are legacy compatibility APIs.
     engine.rootContext()->setContextProperty("PTBasePath", ptBasePath());
     engine.rootContext()->setContextProperty("PTBaseUrl", ptBaseUrl());
-
-#ifdef HAVE_DDCUTIL
-    engine.rootContext()->setContextProperty("HAVE_DDCUTIL", true);
-#else
-    engine.rootContext()->setContextProperty("HAVE_DDCUTIL", false);
-#endif
     engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
     return app.exec();
 

@@ -16,6 +16,16 @@ Item {
     property string mainvaluename
     property double triggervalue : 0
     property double triggeroffvalue : 0
+    onStatepicturesourceoffChanged: {
+        var resolvedSource = Connect.resolveLogoUrl(statepicturesourceoff)
+        if (resolvedSource !== statepicturesourceoff)
+            statepicturesourceoff = resolvedSource
+    }
+    onStatepicturesourceonChanged: {
+        var resolvedSource = Connect.resolveLogoUrl(statepicturesourceon)
+        if (resolvedSource !== statepicturesourceon)
+            statepicturesourceon = resolvedSource
+    }
     Drag.active: true
     DatasourcesList{id: powertunedatasource}
     Component.onCompleted: {togglemousearea();
@@ -174,7 +184,7 @@ Item {
                 model: Dashboard.backroundpictures
                 currentIndex: 0
                 onCurrentIndexChanged: {
-                    statepicturesourceoff = PTBaseUrl + "/Logo/" + pictureSelectoroff.textAt(pictureSelectoroff.currentIndex);
+                    statepicturesourceoff = Connect.logoResourceUrl(pictureSelectoroff.textAt(pictureSelectoroff.currentIndex));
                     //statepicturesourceoff = "file:" + pictureSelectoroff.textAt(pictureSelectoroff.currentIndex); // windows
                     statepictureoff.source = statepicturesourceoff;
                                        }
@@ -200,7 +210,7 @@ Item {
                 model: Dashboard.backroundpictures
                 currentIndex: 0
                 onCurrentIndexChanged: {
-                    statepicturesourceon = PTBaseUrl + "/Logo/" + pictureSelectoron.textAt(pictureSelectoron.currentIndex);
+                    statepicturesourceon = Connect.logoResourceUrl(pictureSelectoron.textAt(pictureSelectoron.currentIndex));
                     //statepicturesourceon = "file:" + pictureSelectoron.textAt(pictureSelectoron.currentIndex); // windows
                     statepictureon.source = statepicturesourceon;
                 }
@@ -359,14 +369,14 @@ function triggerofffColor()
     function updatppiclist()
     {
                     for(var i = 0; i < pictureSelectoron.count; ++i) //
-                    if (statepicturesourceon === PTBaseUrl + "/Logo/" + pictureSelectoron.textAt(i))
+                    if (statepicturesourceon === Connect.logoResourceUrl(pictureSelectoron.textAt(i)))
                     pictureSelectoron.currentIndex = i
                     updatppiclistoff()
     }
     function updatppiclistoff()
     {
                     for(var i = 0; i < pictureSelectoroff.count; ++i) //
-                    if (statepicturesourceoff === PTBaseUrl + "/Logo/" + pictureSelectoroff.textAt(i))
+                    if (statepicturesourceoff === Connect.logoResourceUrl(pictureSelectoroff.textAt(i)))
                     pictureSelectoroff.currentIndex = i
     }
 }

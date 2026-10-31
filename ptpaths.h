@@ -35,6 +35,30 @@ inline QString ptDashboardsPath()
     return QDir(ptDataPath()).filePath(QStringLiteral("UserDashboards"));
 }
 
+inline QString ptLogoPath()
+{
+    return QDir(ptDataPath()).filePath(QStringLiteral("Logo"));
+}
+
+inline QString ptLogoFileUrl(const QString &fileName)
+{
+    return QUrl::fromLocalFile(QDir(ptLogoPath()).filePath(fileName)).toString();
+}
+
+inline QString ptResolveLogoUrl(const QString &resource)
+{
+    const QString legacyLogoPrefix = QStringLiteral("file:///home/pi/Logo/");
+    if (resource == QStringLiteral("None") ||
+        resource == QStringLiteral("/Logo") ||
+        !resource.startsWith(legacyLogoPrefix)) {
+        return resource;
+    }
+
+    const QString fileName = QUrl::fromPercentEncoding(
+        resource.mid(legacyLogoPrefix.size()).toUtf8());
+    return ptLogoFileUrl(fileName);
+}
+
 inline QString ptConfigPath()
 {
 #ifdef Q_OS_WIN

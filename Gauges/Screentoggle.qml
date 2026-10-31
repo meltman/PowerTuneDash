@@ -4,16 +4,21 @@ import QtQuick.Controls 2.1
 Item {
     id: toggleswitch
     anchors.fill: parent
+    visible: Connect.brightnessSupported()
 
     property bool on: false
 
     function toggle() {
         if (toggleswitch.state == "on")
-        {toggleswitch.state = "off",Connect.setSreenbrightness(50);}
+        {
+            if (Connect.setBrightness(50))
+                toggleswitch.state = "off"
+        }
         else
         {
-            toggleswitch.state = "on";
-            Connect.setSreenbrightness(0);}
+            if (Connect.setBrightness(0))
+                toggleswitch.state = "on";
+        }
     }
 
 

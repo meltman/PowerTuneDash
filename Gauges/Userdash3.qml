@@ -63,6 +63,11 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         z: 0
+        onSourceChanged: {
+            var resolvedSource = Connect.resolveLogoUrl(source)
+            if (resolvedSource !== source)
+                source = resolvedSource
+        }
     }
 
     ComboBox{
@@ -204,8 +209,7 @@ Item {
     function updatppiclist()
     {
                     for(var i = 0; i < backroundSelector.count; ++i)
-//                    if (backroundpicture3.source == PTBaseUrl + "/Logo/" + backroundSelector.textAt(i))
-                        if (backroundpicture3.source == "file:"  + backroundSelector.textAt(i))
+                    if (backroundpicture3.source === Connect.logoResourceUrl(backroundSelector.textAt(i)))
 
 
                     backroundSelector.currentIndex = i
@@ -336,7 +340,7 @@ Item {
                 currentIndex: 0
                 onCurrentIndexChanged: {
 
-                    backroundpicturesource3 = PTBaseUrl + "/Logo/" + backroundSelector.textAt(backroundSelector.currentIndex);
+                    backroundpicturesource3 = Connect.logoResourceUrl(backroundSelector.textAt(backroundSelector.currentIndex));
                     //backroundpicturesource3 = "file:///c:/Logo/" + backroundSelector.textAt(backroundSelector.currentIndex);
                     //backroundpicturesource3 = "file:" + backroundSelector.textAt(backroundSelector.currentIndex);
                     backroundpicture3.source = backroundpicturesource3;

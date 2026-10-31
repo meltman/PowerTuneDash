@@ -8,6 +8,6 @@ Rectangle {
         width: parent.width
         height: parent.height
         fillMode: Image.PreserveAspectFit
-        source: PTBaseUrl + "/Logo/Logo.png"
+        source: Connect.logoResourceUrl("Logo.png")
     }
 }

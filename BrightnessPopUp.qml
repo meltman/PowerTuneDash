@@ -14,6 +14,7 @@ Rectangle{
         color: "grey"
         width: parent.width
         height: parent.height
+        visible: Dashboard.screen
         property int brightnessValue
 
 
@@ -28,7 +29,7 @@ Rectangle{
             //anchors.right: parent.right
             layoutDirection: "RightToLeft"
             spacing: popUp1.width / 12
-            visible: true //Dashboard.screen
+            visible: Dashboard.screen
 
             Button {
 
@@ -42,13 +43,11 @@ Rectangle{
                 font.pixelSize: popUp1.width / 7.5
 
                 onClicked: {
-                    if (Qt.platform.os === "linux" && HAVE_DDCUTIL) {
-                        brightnessValue = 10;
-                    }else{
-                        brightnessValue = 25
-                    }
-                        Connect.setSreenbrightness(brightnessValue);
-                        AppSettings.writebrightnessettings(brightnessValue);
+                    if (!Connect.brightnessSupported())
+                        return;
+                    brightnessValue = 25
+                    Connect.setBrightness(brightnessValue);
+                    AppSettings.writebrightnessettings(brightnessValue);
                         //console.log("Low Brightness: " + brightnessValue)
 
                 }
@@ -72,13 +71,11 @@ Rectangle{
                 transformOrigin: Item.Center
 
                 onClicked: {
-                    if (Qt.platform.os === "linux" && HAVE_DDCUTIL) {
-                        brightnessValue = 75;
-                    }else{
-                        brightnessValue = 255
-                    }
-                        Connect.setSreenbrightness(brightnessValue);
-                        AppSettings.writebrightnessettings(brightnessValue);
+                    if (!Connect.brightnessSupported())
+                        return;
+                    brightnessValue = 255
+                    Connect.setBrightness(brightnessValue);
+                    AppSettings.writebrightnessettings(brightnessValue);
                         //console.log("High Brightness: " + brightnessValue)
 
                 }
@@ -102,4 +99,3 @@ Rectangle{
        }
 
 }
-
