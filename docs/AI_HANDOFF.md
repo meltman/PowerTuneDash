@@ -22,6 +22,10 @@ The validated Device 0 baseline is:
 * Dashboard edit, import/export, and save operate.
 * EC25 GNSS/NMEA works.
 * Application-file logging works.
+* Device 0 HDMI playback works through ALSA `plughw:0,0`; raw `hw:0,0`
+  rejects default S16_LE parameters. The target Qt Multimedia configuration
+  retains ALSA and disables its PulseAudio feature for warning sounds;
+  application playback still needs target verification.
 * Weston, Docker, and containerd automatic startup are disabled.
 * U-Boot environment can be read and written from Linux.
 * Command-line eMMC/U-Boot recovery tools remain available.
@@ -56,6 +60,8 @@ unverified. Do not guess or present source inspection as runtime validation.
 * Never remove legacy behavior without proving whether it is active.
 * Do not mix large architectural refactors with hardware bring-up.
 * Preserve user-replaceable resources as external mutable data.
+* Do not add an audio server to satisfy PowerTune warning sounds; use the
+  documented target ALSA backend and runtime capability check.
 * PowerTuneDash changes must be committed before BitBake consumes them.
 * Do not blindly stage unrelated `meta-powertune` BSP/Falcon work.
 

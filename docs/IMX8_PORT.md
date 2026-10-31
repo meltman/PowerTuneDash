@@ -56,6 +56,33 @@ currently supplied by the product image. Typography assets and their
 licensing/distribution review remain outstanding. Do not add font files
 without resolving that work.
 
+## HDMI audio and warning sounds
+
+Device 0 exposes HDMI playback through ALSA card 0 (`audio-hdmi`), device 0
+(`i.MX HDMI i2s-hifi-0`), including `/dev/snd/pcmC0D0p`. Raw playback through
+`hw:0,0` failed with the default S16_LE parameters; playback through ALSA's
+`plughw:0,0` conversion layer succeeded and was audible through the HDMI
+display speakers. PowerTune must leave ALSA device selection and format
+negotiation/conversion to Qt and ALSA; it must not hard-code either endpoint
+or assume the raw PCM accepts the warning WAV's format.
+
+PowerTune's Qt Multimedia target configuration retains ALSA and disables Qt
+Multimedia's PulseAudio feature. The existing RPM, coolant-temperature,
+knock, and boost warning sounds use Qt's generic audio output with the ALSA
+backend and do not require a PulseAudio server. The application checks once
+at startup whether Qt reports a default output and supports its own preferred
+format. If not, the warning `SoundEffect` is not instantiated and audio
+warnings are a no-op for that session. The check does not prescribe the
+warning WAV format or an ALSA hardware device; playback format negotiation
+remains with Qt/ALSA. This cached check logs exactly one `qInfo()` diagnostic:
+either that warning audio is unavailable for the session, or that it is enabled
+with Qt's selected output device name and preferred sample rate, channel count,
+sample size/type, and codec. Hardware playback through `plughw:0,0` is validated;
+the application warning through the rebuilt Qt ALSA backend still requires
+runtime verification. The optional GStreamer media player and camera are
+separate features and are not changed by this warning-audio work; their
+behavior without an audio server is not established here.
+
 ## Dashboard architecture and persistence
 
 The dash selector's values map as follows:

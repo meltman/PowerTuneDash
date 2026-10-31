@@ -10,6 +10,7 @@ Rectangle {
     color: "grey"
     property int test1: 0
     property int connected: 0
+    property bool warningAudioAvailable: Connect.audioOutputAvailable()
     property var gpscom
     property int hexstring
     property int hexstring2
@@ -50,9 +51,14 @@ Rectangle {
             property alias shiftlightcanbase: shiftlightbaseadresstext.text
             property alias languagecombobox: languageselect.currentIndex
         }
-        SoundEffect {
+        Loader {
             id: warnsound
-            source: "qrc:/Sounds/alarm.wav"
+            active: windowbackround.warningAudioAvailable
+            sourceComponent: Component {
+                SoundEffect {
+                    source: "qrc:/Sounds/alarm.wav"
+                }
+            }
         }
 
         Connections {
@@ -1184,8 +1190,9 @@ Rectangle {
         //Function to play warning sound
         id: playwarning
         function start() {
-            if (warnsound.playing == false)
-                warnsound.play()
+            if (windowbackround.warningAudioAvailable && warnsound.item
+                    && warnsound.item.playing == false)
+                warnsound.item.play()
         }
     }
 
@@ -1215,4 +1222,3 @@ Designer {
     D{i:0;autoSize:true;height:480;width:640}
 }
 ##^##*/
-

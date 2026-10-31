@@ -46,6 +46,8 @@
 #include <QTextStream>
 #include <QByteArrayMatcher>
 #include <QProcess>
+#include <QAudioDeviceInfo>
+#include <QAudioFormat>
 
 int ecu; //0=apex, 1=adaptronic;2= OBD; 3= Dicktator ECU
 int logging; // 0 Logging off , 1 Logging to file
@@ -79,6 +81,53 @@ QString sysfsBacklightBrightnessPath()
     return QString();
 }
 
+QString audioSampleTypeName(QAudioFormat::SampleType sampleType)
+{
+    switch (sampleType) {
+    case QAudioFormat::SignedInt:
+        return QStringLiteral("signed integer");
+    case QAudioFormat::UnSignedInt:
+        return QStringLiteral("unsigned integer");
+    case QAudioFormat::Float:
+        return QStringLiteral("floating point");
+    case QAudioFormat::Unknown:
+        return QStringLiteral("unknown");
+    }
+    return QStringLiteral("unknown");
+}
+
+bool warningAudioOutputAvailable()
+{
+    static const bool available = []() {
+        const QAudioDeviceInfo device = QAudioDeviceInfo::defaultOutputDevice();
+        if (device.isNull()) {
+            qInfo().noquote()
+                << QStringLiteral("INFO Warning audio unavailable; audible warnings disabled for this session");
+            return false;
+        }
+
+        const QAudioFormat preferredFormat = device.preferredFormat();
+        if (!preferredFormat.isValid() || !device.isFormatSupported(preferredFormat)) {
+            qInfo().noquote()
+                << QStringLiteral("INFO Warning audio unavailable; audible warnings disabled for this session");
+            return false;
+        }
+
+        const QString formatDescription =
+            QStringLiteral("%1 Hz, %2 channels, %3-bit %4, codec=%5")
+                .arg(preferredFormat.sampleRate())
+                .arg(preferredFormat.channelCount())
+                .arg(preferredFormat.sampleSize())
+                .arg(audioSampleTypeName(preferredFormat.sampleType()))
+                .arg(preferredFormat.codec());
+        qInfo().noquote()
+            << QStringLiteral("INFO Warning audio enabled: output=\"%1\", preferred=\"%2\"")
+                   .arg(device.deviceName(), formatDescription);
+        return true;
+    }();
+    return available;
+}
+
 }
 
 Connect::Connect(QObject *parent) :
@@ -95,10 +144,12 @@ Connect::Connect(QObject *parent) :
     m_calculations(Q_NULLPTR),
     m_arduino(Q_NULLPTR),
     m_wifiscanner(Q_NULLPTR),
-    m_extender(Q_NULLPTR)
+    m_extender(Q_NULLPTR),
+    m_audioOutputAvailable(false)
 
 {
 
+    m_audioOutputAvailable = warningAudioOutputAvailable();
     getPorts();
     m_dashBoard = new DashBoard(this);
     m_appSettings = new AppSettings(m_dashBoard, this);
@@ -238,6 +289,11 @@ bool Connect::setBrightness(int brightness)
 
     const QByteArray value = QByteArray::number(brightness);
     return outputFile.write(value) == value.size() && outputFile.flush();
+}
+
+bool Connect::audioOutputAvailable() const
+{
+    return m_audioOutputAvailable;
 }
 
 QString Connect::resolveLogoUrl(const QString &resource) const

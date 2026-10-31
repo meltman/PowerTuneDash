@@ -59,6 +59,7 @@ public:
     Q_INVOKABLE bool initializeBrightness();
     Q_INVOKABLE bool brightnessSupported() const;
     Q_INVOKABLE bool setBrightness(int brightness);
+    Q_INVOKABLE bool audioOutputAvailable() const;
     Q_INVOKABLE QString resolveLogoUrl(const QString &resource) const;
     Q_INVOKABLE QString logoResourceUrl(const QString &fileName) const;
     Q_INVOKABLE void readavailabledashfiles();
@@ -118,6 +119,7 @@ private:
     Arduino *m_arduino;
     WifiScanner *m_wifiscanner;
     Extender *m_extender;
+    bool m_audioOutputAvailable;
 
 
 

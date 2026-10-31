@@ -217,3 +217,46 @@ must remain interpretable.
 
 **What not to do:** Do not reinterpret `numberofdash` as a literal count or
 equate a visible slot with a UserDash definition.
+
+## PT-011 — Use Qt ALSA output for target warning sounds
+
+**Context:** Device 0 has HDMI ALSA playback but no running PulseAudio,
+PipeWire, or WirePlumber service. Qt Multimedia's Pulse-enabled
+`QSoundEffect` attempted a Pulse connection at startup and retried after
+failure.
+
+**Decision:** In the `meta-powertune` target build, disable Qt Multimedia's
+PulseAudio feature and retain ALSA. Preserve PowerTune's existing warning
+sounds and instantiate them only when Qt reports a default output device.
+Leave device selection and playback format negotiation/conversion to Qt and
+ALSA; capability detection checks Qt's own preferred format rather than
+assuming a particular hardware PCM format. Log the cached outcome once with
+`qInfo()`, including Qt-reported output and format details when available.
+
+**Rationale:** Direct ALSA is available on Device 0 and avoids making an
+audio server a prerequisite for warning sounds. Device 0's raw `hw:0,0` PCM
+does not accept the default S16_LE test parameters, while ALSA's `plughw:0,0`
+conversion path plays successfully. A single cached Qt default-device and
+preferred-format check avoids format-specific hardware assumptions and keeps
+a missing/unusable default output from initializing the warning effect. The
+one-time diagnostic makes the selected backend-facing output visible through
+both the application log and journald.
+
+**Validated evidence:** Device 0 exposes ALSA card 0, device 0, and
+`/dev/snd/pcmC0D0p`; `speaker-test -D hw:0,0` failed with default parameters,
+while `speaker-test -D plughw:0,0` produced audible HDMI sound. The Qt
+Multimedia recipe has independent `alsa` and
+`pulseaudio` `PACKAGECONFIG` features; with Pulse disabled, Qt 5.15.13's
+`QSoundEffect` uses its generic `QAudioOutput` implementation. The
+`meta-powertune` append applies `-no-pulseaudio` and retains `alsa`.
+Qt output-device/preferred-format detection is source-validated. Application
+warning playback on Device 0 remains pending target runtime validation.
+
+**Compatibility impact:** This policy applies to the Yocto product target
+using `meta-powertune`; Windows/developer builds keep their platform's normal
+Qt audio configuration. Optional GStreamer media/camera behavior is not
+redefined.
+
+**What not to do:** Do not add or start PulseAudio/PipeWire for warning
+sounds, remove warning thresholds or triggers, or infer target audio support
+from the build host.
