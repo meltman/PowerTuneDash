@@ -1386,7 +1386,7 @@ void DashBoard::setBoostPres(const qreal &BoostPres)
         m_BoostPres = (temp/10);
         }
     }
-    emit BoostPresChanged(BoostPres);
+    emit boostPresChanged(BoostPres);
 
 
 }
@@ -2000,14 +2000,14 @@ void DashBoard::setWifiStat(const QString &WifiStat)
     if (m_WifiStat == WifiStat)
         return;
     m_WifiStat = WifiStat;
-    emit WifiStatChanged(WifiStat);
+    emit wifiStatChanged(WifiStat);
 }
 void DashBoard::setEthernetStat(const QString &EthernetStat)
 {
     if (m_EthernetStat == EthernetStat)
         return;
     m_EthernetStat = EthernetStat;
-    emit EthernetStatChanged(EthernetStat);
+    emit ethernetStatChanged(EthernetStat);
 }
 
 void DashBoard::setCBXCountrysave(const QString &CBXCountrysave)
@@ -4315,7 +4315,7 @@ void DashBoard::setBrightness(const int &Brightness)
     if (m_Brightness == Brightness)
         return;
     m_Brightness = Brightness;
-    emit BrightnessChanged(Brightness);
+    emit brightnessChanged(Brightness);
 }
 void DashBoard::setVisibledashes(const int &Visibledashes)
 {

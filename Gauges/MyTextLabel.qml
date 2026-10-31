@@ -9,7 +9,7 @@ Item {
     property string information: "Text label gauge"
     property string displaytext
     property string fonttype
-    property int fontsize
+    property int fontsize: 12
     property string textcolor
     property string datasourcename
     property bool fontbold
@@ -21,6 +21,8 @@ Item {
     Drag.active: true
 
     Component.onCompleted: {
+        if (fontsize <= 0)
+            fontsize = 12;
         togglemousearea();
         checkdatasource();
     }
@@ -84,7 +86,7 @@ Item {
         id: mytext
         text: displaytext
         font.family: fonttype
-        font.pointSize: fontsize
+        font.pointSize: fontsize > 0 ? fontsize : 12
         font.bold: fontbold
         color: textcolor
         anchors.centerIn: parent
@@ -140,7 +142,7 @@ Item {
                     onPressAndHold: {timer.running = true;
                         increasedecreaseident = "decreasefontsize"}
                     onReleased: {timer.running = false;}
-                    onClicked: {fontsize--}
+                    onClicked: {if (fontsize > 1) fontsize--}
                 }
                 Text{id: sizeTxt
                     text: fontsize
@@ -401,7 +403,8 @@ Item {
             break;
         }
         case "decreasefontsize": {
-            fontsize--;
+            if (fontsize > 1)
+                fontsize--;
             break;
         }
         }

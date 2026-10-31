@@ -58,7 +58,7 @@ class DashBoard : public QObject
     Q_PROPERTY(qreal Inj READ Inj WRITE setInj NOTIFY injChanged)
     Q_PROPERTY(qreal Ign READ Ign WRITE setIgn NOTIFY ignChanged)
     Q_PROPERTY(qreal Dwell READ Dwell WRITE setDwell NOTIFY dwellChanged)
-    Q_PROPERTY(qreal BoostPres READ BoostPres WRITE setBoostPres NOTIFY BoostPresChanged)
+    Q_PROPERTY(qreal BoostPres READ BoostPres WRITE setBoostPres NOTIFY boostPresChanged)
     Q_PROPERTY(qreal BoostPreskpa READ BoostPreskpa WRITE setBoostPreskpa NOTIFY BoostPreskpaChanged)
     Q_PROPERTY(qreal BoostDuty READ BoostDuty WRITE setBoostDuty NOTIFY boostDutyChanged)
     Q_PROPERTY(qreal MAFactivity READ MAFactivity WRITE setMAFactivity NOTIFY mAFactivityChanged)
@@ -147,8 +147,8 @@ class DashBoard : public QObject
     Q_PROPERTY(QString TimeoutStat READ TimeoutStat WRITE setTimeoutStat NOTIFY timeoutStatChanged)
     Q_PROPERTY(QString RunStat READ RunStat WRITE setRunStat NOTIFY runStatChanged)
 
-    Q_PROPERTY(QString WifiStat READ WifiStat WRITE setWifiStat NOTIFY WifiStatChanged)
-    Q_PROPERTY(QString EthernetStat READ EthernetStat WRITE setEthernetStat NOTIFY EthernetStatChanged)
+    Q_PROPERTY(QString WifiStat READ WifiStat WRITE setWifiStat NOTIFY wifiStatChanged)
+    Q_PROPERTY(QString EthernetStat READ EthernetStat WRITE setEthernetStat NOTIFY ethernetStatChanged)
 
     Q_PROPERTY(QString CBXCountrysave READ CBXCountrysave WRITE setCBXCountrysave NOTIFY CBXCountrysaveChanged)
     Q_PROPERTY(QString CBXTracksave READ CBXTracksave WRITE setCBXTracksave NOTIFY CBXTracksaveChanged)
@@ -486,7 +486,7 @@ class DashBoard : public QObject
 
     Q_PROPERTY(qreal FuelLevel READ FuelLevel WRITE setFuelLevel NOTIFY FuelLevelChanged)
     Q_PROPERTY(qreal SteeringWheelAngle READ SteeringWheelAngle WRITE setSteeringWheelAngle NOTIFY SteeringWheelAngleChanged)
-    Q_PROPERTY(int Brightness READ Brightness WRITE setBrightness NOTIFY BrightnessChanged)
+    Q_PROPERTY(int Brightness READ Brightness WRITE setBrightness NOTIFY brightnessChanged)
     Q_PROPERTY(int Visibledashes READ Visibledashes WRITE setVisibledashes NOTIFY VisibledashesChanged)
     Q_PROPERTY(int oilpressurelamp READ oilpressurelamp WRITE setoilpressurelamp NOTIFY oilpressurelampChanged)
     Q_PROPERTY(int overtempalarm READ overtempalarm WRITE setovertempalarm NOTIFY overtempalarmChanged)
@@ -2017,7 +2017,7 @@ signals:
     void injChanged(qreal Inj);
     void ignChanged(qreal Ign);
     void dwellChanged(qreal Dwell);
-    void BoostPresChanged(qreal BoostPres);
+    void boostPresChanged(qreal BoostPres);
     void BoostPreskpaChanged(qreal BoostPreskpa);
 
     void boostDutyChanged(qreal BoostDuty);
@@ -2111,8 +2111,8 @@ signals:
     void recvDataChanged(QString RecvData);
     void timeoutStatChanged(QString TimeoutStat);
     void runStatChanged(QString RunStat);
-    void WifiStatChanged(QString WifiStat);
-    void EthernetStatChanged(QString EthernetStat);
+    void wifiStatChanged(QString WifiStat);
+    void ethernetStatChanged(QString EthernetStat);
 
     void CBXCountrysaveChanged(QString CBXCountrysave);
     void CBXTracksaveChanged(QString CBXTracksave);
@@ -2414,7 +2414,7 @@ signals:
 
     void FuelLevelChanged(qreal FuelLevel);
     void SteeringWheelAngleChanged(qreal SteeringWheelAngle);
-    void BrightnessChanged(int Brightness);
+    void brightnessChanged(int Brightness);
     void VisibledashesChanged(int Visibledashes);
     void oilpressurelampChanged(int oilpressurelamp);
     void overtempalarmChanged(int overtempalarm);

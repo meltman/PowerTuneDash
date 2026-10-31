@@ -154,6 +154,11 @@ separate decision.
 
 ## Runtime identity
 
+systemd creates a private `/run/powertune` runtime directory with mode `0700`
+and sets `XDG_RUNTIME_DIR=/run/powertune`, avoiding Qt's `/tmp/runtime-root`
+fallback. The directory ownership follows the service's configured user, so a
+future switch to `User=gauges` can use the same systemd-managed setup.
+
 The image creates the `gauges` system account with configured home
 `/var/lib/powertune` and supplementary `dialout` and `video` groups. The
 service currently runs as `root` with group `gauges`; its log directory is

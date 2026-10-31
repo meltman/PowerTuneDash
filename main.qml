@@ -423,7 +423,7 @@ ApplicationWindow {
                          //anchors.fill: plusBrightness
                          width: plusBrightness.width
                          height: plusBrightness.height
-                         anchors.centerIn: plusBrightness.horizontalCenter
+                         anchors.centerIn: plusBrightness
                          }
                      }
                  }
@@ -463,7 +463,7 @@ ApplicationWindow {
                          //anchors.fill: plusBrightness
                          width: minusBrightness.width
                          height: minusBrightness.height
-                         anchors.centerIn: minusBrightness.horizontalCenter
+                         anchors.centerIn: minusBrightness
                          }
                      }
                  }
