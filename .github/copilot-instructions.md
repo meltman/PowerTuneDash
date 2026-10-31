@@ -1,39 +1,52 @@
-Target: CompuLab IOT-GATE-IMX8PLUS / i.MX8MP
+# PowerTune Coding-Agent Contract
 
-Production UI:
-Qt5 + EGLFS/KMS
-/dev/dri/card1
-No Weston requirement
+Before architectural or platform changes, read these in order:
 
-Platform:
-Yocto Scarthgap
-meta-powertune owns product integration
+1. `.github/copilot-instructions.md`
+2. `docs/AI_HANDOFF.md`
+3. `docs/IMX8_PORT.md`
+4. `docs/ARCHITECTURE_DECISIONS.md`
+5. Recent Git history
+6. `meta-powertune` documentation for image/platform work
 
-Rules:
-- Do not introduce new Raspberry Pi assumptions.
-- Do not hardcode /home/pi.
-- Preserve Windows development support.
-- Separate immutable resources, mutable data,
-  configuration, logs and helper executables.
-- Preserve backward compatibility with legacy
-  dashboard files where practical.
-- Do not casually alter ECU/CAN protocol behavior.
-- Prefer standard Linux interfaces over Pi-specific
-  commands and sysfs paths.
-- HDMI brightness on i.MX8MP will use DDC/CI,
-  not rpi_backlight.
-- Make small, reviewable changes.
-- Do not commit or push without explicit instruction.
+## Project baseline
 
-Build and deployment workflow:
-- The authoritative i.MX8MP build is the Yocto/BitBake recipe powertunedash.
-- PowerTuneDash is cross-compiled through Yocto. Do not treat native host qmake or make builds as authoritative.
-- The development source checkout on ubuntu-dev is shared into the Yocto container as /work/PowerTuneDash.
-- The Yocto container shell automatically initializes the existing build-imx8mp environment.
-- For normal application validation, use pt-build.
-- For deployment to the development IOT-GATE target, use pt-deploy.
-- pt-build runs the required BitBake build/install tasks and records the resulting AArch64 artifact.
-- pt-deploy installs that artifact on the development target and restarts powertunedash.service.
-- Do not manually search tmp/work for artifacts during the normal development workflow.
-- Do not run cleansstate, delete build output, or otherwise invalidate Yocto caches unless explicitly instructed.
-- Do not create an alternate native qmake/make build workflow unless explicitly requested.
+* Target: CompuLab IOT-GATE-IMX8PLUS / NXP i.MX8MP, Yocto Linux, Qt 5.
+* Production UI: direct EGLFS/KMS on `/dev/dri/card1`; `"hwcursor": false`.
+* Product integration belongs in `meta-powertune`.
+* USB live boot is the standard image-validation workflow; eMMC flashing is
+  intentional milestone deployment.
+
+## Required practices
+
+* Use role-specific filesystem paths; do not add hard-coded Linux paths.
+* Preserve Windows development compatibility under `C:/PowerTune`.
+* Preserve user-customizable resources as mutable data; do not replace them
+  with embedded defaults unless the resource is intentionally immutable.
+* Detect hardware capability through a backend, not board-name checks or
+  build-host filesystem contents.
+* Investigate legacy code and persisted formats before broad refactors.
+* Keep changes small, scoped, and testable; do not casually change ECU/CAN,
+  networking, or hardware behavior.
+* Separate validated facts from proposals, and do not invent validation
+  evidence.
+* Update the relevant documentation in the same change set if architecture,
+  platform behavior, hardware integration, filesystem roles, persistence,
+  compatibility, boot behavior, or the known-good baseline changes. Small
+  fixes that do not change a documented contract need no documentation churn.
+* PowerTuneDash is fetched by BitBake from Git: commit intended application
+  changes before building. Never assume a dirty PowerTuneDash worktree is what
+  BitBake will build.
+* `meta-powertune` is consumed directly as a local layer and can be built
+  before commit. Inspect its worktree and do not stage unrelated BSP or
+  Falcon/U-Boot work.
+* Do not commit or push unless explicitly requested.
+
+## Build workflow notes
+
+The authoritative target build is Yocto/BitBake (`powertunedash` and the
+product image), not a native host qmake/make build. In the established
+development environment, `pt-build` and `pt-deploy` may be available; verify
+their current behavior and source provenance before use. Do not run
+`cleansstate`, delete build output, or invalidate Yocto caches unless
+explicitly requested.
