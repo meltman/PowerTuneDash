@@ -76,6 +76,14 @@ void applicationMessageHandler(QtMsgType type, const QMessageLogContext &context
     }
 }
 
+void installApplicationMessageHandler()
+{
+    const QtMessageHandler currentHandler =
+        qInstallMessageHandler(applicationMessageHandler);
+    if (currentHandler != applicationMessageHandler)
+        previousMessageHandler = currentHandler;
+}
+
 void initializeApplicationLogging()
 {
     const QString logPath = QDir(ptLogsPath()).filePath(QStringLiteral("powertunedash.log"));
@@ -88,7 +96,7 @@ void initializeApplicationLogging()
         fflush(stderr);
     }
 
-    previousMessageHandler = qInstallMessageHandler(applicationMessageHandler);
+    installApplicationMessageHandler();
 }
 
 }
@@ -100,6 +108,7 @@ int main(int argc, char *argv[])
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
     initializeApplicationLogging();
     QApplication app(argc, argv);
+    installApplicationMessageHandler();
     app.setOrganizationName("Power-Tune");
     app.setOrganizationDomain("power-tune.org");
     app.setApplicationName("PowerTune");
