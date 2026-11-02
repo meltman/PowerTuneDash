@@ -116,7 +116,7 @@ Rectangle {
     */
     Connections{
         target: Dashboard
-        onDraggableChanged:togglemousearea()
+        function onDraggableChanged() {togglemousearea()}
     }
 
     Text {

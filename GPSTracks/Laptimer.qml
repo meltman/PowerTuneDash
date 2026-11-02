@@ -53,9 +53,9 @@ Rectangle {
 
     Connections{
         target: Dashboard
-        onGpsLatitudeChanged : {pos.poschanged()}
-        onGpsLongitudeChanged : {pos.poschanged()}
-        onCurrentLapChanged :{
+        function onGpsLatitudeChanged() {pos.poschanged()}
+        function onGpsLongitudeChanged() {pos.poschanged()}
+        function onCurrentLapChanged() {
             if (Dashboard.currentLap > 1)
             {
                 laptimeModel.append({"lap":Dashboard.currentLap-1, "time":Dashboard.laptime})
@@ -74,7 +74,7 @@ Rectangle {
 
         Connections{
             target: Dashboard
-            onCurrentLapChanged :{
+            function onCurrentLapChanged() {
                 if (Dashboard.currentLap > 0){elapsedTimer.running = true,mapItem.startTime = 0};
                 if (Dashboard.currentLap == 0){elapsedTimer.running = false,mapItem.startTime = 0};
             }

@@ -121,7 +121,7 @@ Rectangle{
     }
     Connections{
         target: Dashboard
-        onDraggableChanged:togglemousearea()
+        function onDraggableChanged() {togglemousearea()}
     }
 
 
@@ -217,9 +217,9 @@ Rectangle{
 
                     Connections {
                         target: roundGauge
-                        onNeedlecolorChanged: needlecanvas.requestPaint()
-                        onNeedlecolor2Changed: needlecanvas.requestPaint()
-                        onNeedleTipWidthChanged: needlecanvas.requestPaint()
+                        function onNeedlecolorChanged() { needlecanvas.requestPaint() }
+                        function onNeedlecolor2Changed() { needlecanvas.requestPaint() }
+                        function onNeedleTipWidthChanged() { needlecanvas.requestPaint() }
                     }
 
 
@@ -293,8 +293,8 @@ Rectangle{
 
                     Connections{
                         target: roundGauge
-                        onRedareainsetChanged : redcanvas.requestPaint()
-                        onRedareawidthChanged : redcanvas.requestPaint()
+                        function onRedareainsetChanged() { redcanvas.requestPaint() }
+                        function onRedareawidthChanged() { redcanvas.requestPaint() }
                     }
 
                     onPaint: {
@@ -2417,4 +2417,3 @@ Menu{
         }
     }
 }
-

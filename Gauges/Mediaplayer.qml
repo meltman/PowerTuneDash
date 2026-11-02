@@ -14,7 +14,7 @@ Rectangle {
     property bool playing: false
     Connections{
         target: Dashboard
-        onMusicpathChanged : folderModel.folder = Dashboard.musicpath
+        function onMusicpathChanged() { folderModel.folder = Dashboard.musicpath }
     }
     TreeView {
         id:mp3selector

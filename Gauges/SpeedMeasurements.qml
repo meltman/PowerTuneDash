@@ -19,16 +19,16 @@ Rectangle {
     //STAGING Lights
     Connections{
         target: Dashboard
-        onSpeedChanged :{speedchange.start()}
+        function onSpeedChanged() {speedchange.start()}
     }
     Connections{
         target: Dashboard
-        onSpeedunitsChanged :{units.start()}
+        function onSpeedunitsChanged() {units.start()}
     }
 
     Connections{
         target: Dashboard
-        onReactiontimeChanged :{reactiontimecheck.start()}
+        function onReactiontimeChanged() {reactiontimecheck.start()}
     }
 
 

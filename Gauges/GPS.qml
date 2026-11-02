@@ -11,10 +11,10 @@ Rectangle {
 
     Connections {
         target: Dashboard
-        onGpsLatitudeChanged: {
+        function onGpsLatitudeChanged() {
             pos.poschanged()
         }
-        onGpsLongitudeChanged: {
+        function onGpsLongitudeChanged() {
             pos.poschanged()
         }
     }

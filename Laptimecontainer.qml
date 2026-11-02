@@ -8,7 +8,7 @@ Rectangle {
 
     Connections{
         target: Dashboard
-        onCurrentLapChanged :{
+        function onCurrentLapChanged() {
             if (Dashboard.currentLap > 1)
             {
                 laptimeModel.append({"lap":Dashboard.currentLap-1, "time":Dashboard.laptime})

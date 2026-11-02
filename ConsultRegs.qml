@@ -9,7 +9,7 @@ Item {
 
     Connections{
         target: Dashboard
-        onSupportedRegChanged: {functsupportedRegs.supportedRegs() }
+        function onSupportedRegChanged() {functsupportedRegs.supportedRegs() }
     }
     Grid {
         rows: 10
@@ -503,4 +503,3 @@ Item {
 
         }
     }
-

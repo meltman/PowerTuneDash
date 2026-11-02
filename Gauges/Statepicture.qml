@@ -34,8 +34,8 @@ Item {
 
     Connections{
         target: Dashboard
-        onDraggableChanged: togglemousearea();
-        onBackroundpicturesChanged: updatppiclist();
+        function onDraggableChanged() { togglemousearea(); }
+        function onBackroundpicturesChanged() { updatppiclist(); }
     }
 
     Image {

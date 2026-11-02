@@ -11,7 +11,7 @@ Rectangle {
     color: "grey"
     Connections {
         target: Dashboard
-        onSerialStatChanged: {
+        function onSerialStatChanged() {
             consoleText.append(Dashboard.SerialStat)
             ////console.log(Dashboard.SerialStat);
             scrollBar.increase()

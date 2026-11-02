@@ -63,38 +63,38 @@ Rectangle {
 
         Connections {
             target: Dashboard
-            onWifiStatChanged: {
+            function onWifiStatChanged() {
                 wifistatus.text = Dashboard.WifiStat
             }
-            onEthernetStatChanged: {
+            function onEthernetStatChanged() {
                 ethernetstatus.text = Dashboard.EthernetStat
             }
 
-            onOdoChanged: {
+            function onOdoChanged() {
                 odometer.text = (Dashboard.Odo).toFixed(3)
             }
-            onTripChanged: {
+            function onTripChanged() {
                 tripmeter.text = (Dashboard.Trip).toFixed(3)
             }
-            onWatertempChanged: {
+            function onWatertempChanged() {
                 if (Dashboard.Watertemp > Dashboard.waterwarn) {
                     playwarning.start()
                 }
                 ;
             }
-            onRpmChanged: {
+            function onRpmChanged() {
                 if (Dashboard.rpm > Dashboard.rpmwarn) {
                     playwarning.start()
                 }
                 ;
             }
-            onKnockChanged: {
+            function onKnockChanged() {
                 if (Dashboard.Knock > Dashboard.knockwarn) {
                     playwarning.start()
                 }
                 ;
             }
-            onBoostPresChanged: {
+            function onBoostPresChanged() {
                 if (Dashboard.BoostPres > Dashboard.boostwarn) {
                     playwarning.start()
                 }

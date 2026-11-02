@@ -1057,7 +1057,7 @@ Button {
         }
         Connections{
             target: Dashboard
-            onSupportedRegChanged: {functsupportedRegs.supportedRegs() }
+            function onSupportedRegChanged() {functsupportedRegs.supportedRegs() }
         }
 
         Item {   //Function for Consult to show only supported Regs
@@ -1320,4 +1320,3 @@ Button {
             }
         }
     }
-

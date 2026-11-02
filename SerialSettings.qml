@@ -20,10 +20,10 @@ Quick1.TabView {
     }
     Connections {
         target: Dashboard
-        onEcuChanged: {
+        function onEcuChanged() {
             setregtabtitle()
         }
-        onLanguageChanged: {
+        function onLanguageChanged() {
             setregtabtitle()
          }
     }

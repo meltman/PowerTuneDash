@@ -111,9 +111,8 @@ Item {
     Connections{
         target: Dashboard
 
-        onBackroundpicturesChanged: updatppiclist();
-        onDashsetup1Changed:
-        {
+        function onBackroundpicturesChanged() { updatppiclist(); }
+        function onDashsetup1Changed() {
             if (dashvalue.textAt(1) !== "") {
 
               //  console.log("new item " +dashvalue.textAt(0) );

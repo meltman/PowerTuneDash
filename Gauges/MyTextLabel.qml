@@ -30,7 +30,7 @@ Item {
     DatasourcesList{id: powertunedatasource}
     Connections{
         target: Dashboard
-        onDraggableChanged: togglemousearea();
+        function onDraggableChanged() { togglemousearea(); }
     }
 
     // MouseArea {

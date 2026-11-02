@@ -14,11 +14,11 @@ Item {
     property  int rpmwarn4: Dashboard.rpmStage4
     Connections{
         target: Dashboard
-        onRpmStage1Changed :rpmwarn1 = Dashboard.rpmStage1
-        onRpmStage2Changed :rpmwarn2 = Dashboard.rpmStage2
-        onRpmStage3Changed :rpmwarn3 = Dashboard.rpmStage3
-        onRpmStage4Changed :rpmwarn4 = Dashboard.rpmStage4
-        onRpmChanged: {
+        function onRpmStage1Changed() { rpmwarn1 = Dashboard.rpmStage1 }
+        function onRpmStage2Changed() { rpmwarn2 = Dashboard.rpmStage2 }
+        function onRpmStage3Changed() { rpmwarn3 = Dashboard.rpmStage3 }
+        function onRpmStage4Changed() { rpmwarn4 = Dashboard.rpmStage4 }
+        function onRpmChanged() {
             if (Dashboard.rpm > rpmwarn1) {led1.source = "qrc:/graphics/ledgreen.png",led8.source = "qrc:/graphics/ledgreen.png"};
             if (Dashboard.rpm > rpmwarn2) {led2.source = "qrc:/graphics/ledgreen.png",led7.source = "qrc:/graphics/ledgreen.png"};
             if (Dashboard.rpm > rpmwarn3) {led3.source = "qrc:/graphics/ledyellow.png",led6.source = "qrc:/graphics/ledyellow.png"};
@@ -85,4 +85,3 @@ Item {
 
         }
     }
-

@@ -39,7 +39,7 @@ Rectangle {
 
     Connections {
         target: Dashboard
-        onCanChanged: {
+        function onCanChanged() {
             var canId = Dashboard.can[0];
             var payload = Dashboard.can[1];
             var itemFound = false;
@@ -65,4 +65,3 @@ Rectangle {
 
     }
 }
-

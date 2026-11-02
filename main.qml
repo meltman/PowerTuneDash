@@ -115,7 +115,7 @@ ApplicationWindow {
 
     Connections{
             target: Dashboard
-            onBrightnessChanged: {
+            function onBrightnessChanged() {
             brightness.value = Dashboard.Brightness
             }
     }
