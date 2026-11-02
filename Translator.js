@@ -172,7 +172,7 @@ var translations = {
            "Start angle": { en: "Start angle", de: "Start Winkel",  jp: "開始角度", es: "Ángulo inicial", fr: "", ar:"" },
            "End angle": { en: "End angle", de: "End Winkel",  jp: "終了角度", es: "Ángulo final", fr: "", ar:"" },
            "Needle color": { en: "Needle color", de: "Nadel Farbe",  jp: "針色", es: "Color de la aguja", fr: "", ar:"" },
-           "Needle length": { en: "Needle lenght", de: "Nadel Länge",  jp: "針の長さ", es: "Longitud de la aguja", fr: "", ar:"" },
+           "Needle length": { en: "Needle length", de: "Nadel Länge",  jp: "針の長さ", es: "Longitud de la aguja", fr: "", ar:"" },
            "Needle base width": { en: "Needle base width", de: "Nadel basis breite",  jp: "針の基部幅", es: "Ancho de la base de la aguja", fr: "", ar:"" },
            "Needle tip width": { en: "Needle tip width", de: "Nadel Spitzen breite",  jp: "針の先端幅", es: "Ancho de la punta de la aguja", fr: "", ar:"" },
            "Needle offset": { en: "Needle offset", de: "Nadel offset",  jp: "針補正", es: "Desplazamiento de la aguja", fr: "", ar:"" },
@@ -645,4 +645,3 @@ function translate(text, language) {
     return translations[text].en || "Translation not found";
 
 }
-

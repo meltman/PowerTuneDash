@@ -26,6 +26,8 @@ Before architectural or platform changes, read these in order:
 * Detect hardware capability through a backend, not board-name checks or
   build-host filesystem contents.
 * Investigate legacy code and persisted formats before broad refactors.
+* Dashboard serialization or widget-schema changes must update
+  `docs/DASHBOARD_SCHEMA.md` in the same change set.
 * Keep changes small, scoped, and testable; do not casually change ECU/CAN,
   networking, or hardware behavior.
 * Separate validated facts from proposals, and do not invent validation

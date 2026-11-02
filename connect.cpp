@@ -208,7 +208,6 @@ void Connect::saveDashtoFile(const QString &filename,const QString &dashstring)
 {
         // qDebug()<<"Filename" << filename + "txt";
     QString fixformat = dashstring;
-    fixformat.replace(",,",", ,");
     QStringList fields = fixformat.split(QRegExp("[\r\n]"));
     const QString dashboardsPath = ptDashboardsPath();
     if (!QDir().mkpath(dashboardsPath))
@@ -365,7 +364,7 @@ void Connect::readdashsetup3()
             QString line = in.readLine();
             QStringList list;
             //if (line.contains("gauge")){
-            list = line.split(QRegExp("\\,"));
+            list = line.split(QRegExp("\\,"), QString::KeepEmptyParts);
             //}
             /*
             else
@@ -373,7 +372,6 @@ void Connect::readdashsetup3()
              line.prepend("Square gauge,");
              list = line.split(QRegExp("\\,"));
             }*/
-            list.removeAll(QString(""));
             m_dashBoard->setdashsetup3(list);
         }
         inputFile.close();
@@ -395,7 +393,7 @@ void Connect::readdashsetup2()
             QString line = in.readLine();
             QStringList list;
             //if (line.contains("gauge")){
-            list = line.split(QRegExp("\\,"));
+            list = line.split(QRegExp("\\,"), QString::KeepEmptyParts);
             //}
             /*
             else
@@ -403,7 +401,6 @@ void Connect::readdashsetup2()
              line.prepend("Square gauge,");
              list = line.split(QRegExp("\\,"));
             }*/
-            list.removeAll(QString(""));
             m_dashBoard->setdashsetup2(list);
         }
         inputFile.close();
@@ -425,7 +422,7 @@ void Connect::readdashsetup1()
             QString line = in.readLine();
             QStringList list;
             //if (line.contains("gauge")){
-            list = line.split(QRegExp("\\,"));
+            list = line.split(QRegExp("\\,"), QString::KeepEmptyParts);
             //}
             /*
             else
@@ -433,7 +430,6 @@ void Connect::readdashsetup1()
              line.prepend("Square gauge,");
              list = line.split(QRegExp("\\,"));
             }*/
-            list.removeAll(QString(""));
             m_dashBoard->setdashsetup1(list);
         }
         inputFile.close();

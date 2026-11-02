@@ -63,13 +63,6 @@ Rectangle {
 
         Connections {
             target: Dashboard
-            function onWifiStatChanged() {
-                wifistatus.text = Dashboard.WifiStat
-            }
-            function onEthernetStatChanged() {
-                ethernetstatus.text = Dashboard.EthernetStat
-            }
-
             function onOdoChanged() {
                 odometer.text = (Dashboard.Odo).toFixed(3)
             }

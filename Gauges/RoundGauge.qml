@@ -156,9 +156,6 @@ Rectangle{
                 popupmenu.popup(touchArea.mouseX, touchArea.mouseY);
             }
         }
-        Component.onCompleted: {toggledecimal();
-            toggledecimal2();
-        }
     }
 
     Timer {
@@ -896,7 +893,7 @@ Rectangle{
             }
 
             Text {
-                text: Translator.translate("Needle lenght", Dashboard.language)
+                text: Translator.translate("Needle length", Dashboard.language)
                 font.bold: true
                 font.pixelSize: 15}
             Grid {

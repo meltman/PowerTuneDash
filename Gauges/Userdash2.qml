@@ -562,7 +562,6 @@ Item {
                 text:  Translator.translate("Square", Dashboard.language)
                 font.pixelSize: mainwindow.width * 0.015
                 onClicked: {
-                    console.log(powertunedatasource.get(cbx_sources.currentIndex).decimalpoints);
                     CreateSquareGaugeScript.createSquareGauge(266,119,0,240,248,powertunedatasource.get(cbx_sources.currentIndex).decimalpoints,powertunedatasource.get(cbx_sources.currentIndex).defaultsymbol,powertunedatasource.get(cbx_sources.currentIndex).titlename,false,true,false,"Dashboard",powertunedatasource.get(cbx_sources.currentIndex).sourcename,powertunedatasource.get(cbx_sources.currentIndex).sourcename,10000,-20000,"lightsteelblue","black","lightsteelblue","white","white","blue",25,40,powertunedatasource.get(cbx_sources.currentIndex).decimalpoints2,"Lato","Lato");
                     squaregaugemenu.visible = false;
                     selectcolor.visible =false;
@@ -643,7 +642,7 @@ Item {
                 font.pixelSize: mainwindow.width * 0.015
                 onClicked: {
                    // console.log("create State gauge ");
-                    CreateStateGIFScript.createPicture(10,10,100,"speed",1,"qrc:/graphics/StateGIF.gif","qrc:/graphics/StateGIF.gif,0");
+                    CreateStateGIFScript.createPicture(10,10,100,"speed",1,"","",0);
                     squaregaugemenu.visible = false;
                     selectcolor.visible =false;
                     Dashboard.setdraggable(0);
@@ -1125,12 +1124,12 @@ Item {
             if(userDash.children[i].information === "Square gauge"){
                 //console.log("Save Square");
                 //Apend all values of each gauge to the List Model
-                gaugelist.append({"type": userDash.children[i].title,"width":userDash.children[i].width,"height":userDash.children[i].height,"x":userDash.children[i].x,"y":userDash.children[i].y,"maxvalue":userDash.children[i].maxvalue,"decplace":userDash.children[i].decimalpoints,"unit":userDash.children[i].mainunit,"id":userDash.children[i].title,"vertgaugevis":userDash.children[i].vertgaugevisible,"horigaugevis":userDash.children[i].horigaugevisible,"secvaluevis":userDash.children[i].secvaluevisible,"valuepropertymain":userDash.children[i].mainvaluename,"valuepropertysec":userDash.children[i].secvaluename,"warnvaluehigh":userDash.children[i].warnvaluehigh,"warnvaluelow":userDash.children[i].warnvaluelow,"framecolor":userDash.children[i].framecolor,"backroundcolor":userDash.children[i].resetbackroundcolor,"titlecolor":userDash.children[i].resettitlecolor,"titletextcolor":userDash.children[i].titletextcolor,"textcolor":userDash.children[i].textcolor,"barcolor":userDash.children[i].barcolor,"titlefontsize":userDash.children[i].titlefontsize,"mainfontsize":userDash.children[i].mainfontsize,"info":userDash.children[i].information,"decplace2":userDash.children[i].decimalpoints2,"textfont":userDash.children[i].textFonttype,"valuefont":userDash.children[i].valueFonttype})
+                gaugelist.append({"width":userDash.children[i].width,"height":userDash.children[i].height,"x":userDash.children[i].x,"y":userDash.children[i].y,"maxvalue":userDash.children[i].maxvalue,"decplace":userDash.children[i].decimalpoints,"unit":userDash.children[i].mainunit,"id":userDash.children[i].title,"vertgaugevis":userDash.children[i].vertgaugevisible,"horigaugevis":userDash.children[i].horigaugevisible,"secvaluevis":userDash.children[i].secvaluevisible,"valuepropertymain":userDash.children[i].mainvaluename,"valuepropertysec":userDash.children[i].secvaluename,"warnvaluehigh":userDash.children[i].warnvaluehigh,"warnvaluelow":userDash.children[i].warnvaluelow,"framecolor":userDash.children[i].framecolor,"backroundcolor":userDash.children[i].resetbackroundcolor,"titlecolor":userDash.children[i].resettitlecolor,"titletextcolor":userDash.children[i].titletextcolor,"textcolor":userDash.children[i].textcolor,"barcolor":userDash.children[i].barcolor,"titlefontsize":userDash.children[i].titlefontsize,"mainfontsize":userDash.children[i].mainfontsize,"info":userDash.children[i].information,"decplace2":userDash.children[i].decimalpoints2,"textfont":userDash.children[i].textFonttype,"valuefont":userDash.children[i].valueFonttype})
             }
             if(userDash.children[i].information === "Bar gauge"){
 
 
-                gaugelist.append({"type": userDash.children[i].title,"width":userDash.children[i].width,"height":userDash.children[i].height,"x":userDash.children[i].x,"y":userDash.children[i].y,"maxvalue":userDash.children[i].maxvalue,"decplace":userDash.children[i].decimalpoints,"unit":userDash.children[i].gaugename,"id":userDash.children[i].title,"valuepropertymain":userDash.children[i].mainvaluename,"warnvaluehigh":userDash.children[i].warnvaluehigh,"warnvaluelow":userDash.children[i].warnvaluelow,"info":userDash.children[i].information,"minvalue":userDash.children[i].minvalue})
+                gaugelist.append({"width":userDash.children[i].width,"height":userDash.children[i].height,"x":userDash.children[i].x,"y":userDash.children[i].y,"maxvalue":userDash.children[i].maxvalue,"decplace":userDash.children[i].decimalpoints,"unit":userDash.children[i].gaugename,"valuepropertymain":userDash.children[i].mainvaluename,"warnvaluehigh":userDash.children[i].warnvaluehigh,"warnvaluelow":userDash.children[i].warnvaluelow,"info":userDash.children[i].information,"minvalue":userDash.children[i].minvalue})
 
                 ;
 

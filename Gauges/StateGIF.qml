@@ -16,6 +16,9 @@ Item {
     property string mainvaluename
     property double triggervalue : 0
     property double triggeroffvalue : 0
+    property bool pictureSelectorsInitialized: false
+    property bool offResourceDiagnosticShown: false
+    property bool onResourceDiagnosticShown: false
     onStatepicturesourceoffChanged: {
         var resolvedSource = Connect.resolveLogoUrl(statepicturesourceoff)
         if (resolvedSource !== statepicturesourceoff)
@@ -38,21 +41,49 @@ Item {
         function onBackroundpicturesChanged() { updatppiclist(); }
     }
 
-     AnimatedImage {
+    AnimatedImage {
         anchors.fill: parent
         id: statepictureoff
-        playing : true
+        playing: visible && status === AnimatedImage.Ready
         fillMode: Image.PreserveAspectFit
-        source:  statepicturesourceoff
+        source: displayGifSource(statepicturesourceoff)
         visible: true
+        onStatusChanged: {
+            if (status === AnimatedImage.Error && source !== "" && !statepicture.offResourceDiagnosticShown) {
+                statepicture.offResourceDiagnosticShown = true
+                console.warn("State GIF resource unavailable:", source)
+            }
+        }
     }
-     AnimatedImage {
+    AnimatedImage {
         anchors.fill: parent
         id: statepictureon
-        playing : true
+        playing: visible && status === AnimatedImage.Ready
         fillMode: Image.PreserveAspectFit
-        source:  statepicturesourceon
+        source: displayGifSource(statepicturesourceon)
         visible: false
+        onStatusChanged: {
+            if (status === AnimatedImage.Error && source !== "" && !statepicture.onResourceDiagnosticShown) {
+                statepicture.onResourceDiagnosticShown = true
+                console.warn("State GIF resource unavailable:", source)
+            }
+        }
+    }
+    Rectangle {
+        anchors.fill: parent
+        color: "#cc333333"
+        border.color: "white"
+        visible: (statepictureoff.visible && statepictureoff.status !== AnimatedImage.Ready)
+                 || (statepictureon.visible && statepictureon.status !== AnimatedImage.Ready)
+        Text {
+            anchors.fill: parent
+            anchors.margins: 8
+            color: "white"
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.WordWrap
+            text: "Configure " + (statepictureoff.visible ? "OFF" : "ON") + " GIF"
+        }
     }
     Text {
         id: mainvaluetextfield
@@ -94,6 +125,7 @@ Item {
                 timerDoubleClick.stop();
                 changesize.visible = true;
                 Connect.readavailablebackrounds();
+                updatppiclist();
                 changesize.x= -statepicture.x;
                 changesize.y= -statepicture.y;
             }
@@ -184,10 +216,11 @@ Item {
                 model: Dashboard.backroundpictures
                 currentIndex: 0
                 onCurrentIndexChanged: {
-                    statepicturesourceoff = Connect.logoResourceUrl(pictureSelectoroff.textAt(pictureSelectoroff.currentIndex));
-                    //statepicturesourceoff = "file:" + pictureSelectoroff.textAt(pictureSelectoroff.currentIndex); // windows
-                    statepictureoff.source = statepicturesourceoff;
-                                       }
+                    if (statepicture.pictureSelectorsInitialized && currentIndex >= 0) {
+                        var selectedName = pictureSelectoroff.textAt(currentIndex)
+                        statepicturesourceoff = selectedName === "None" ? "" : Connect.logoResourceUrl(selectedName)
+                    }
+                }
                 delegate: ItemDelegate {
                     width: pictureSelectoroff.width
                     text: pictureSelectoroff.textRole ? (Array.isArray(pictureSelectoroff.model) ? modelData[pictureSelectoroff.textRole] : model[pictureSelectoroff.textRole]) : modelData
@@ -210,9 +243,10 @@ Item {
                 model: Dashboard.backroundpictures
                 currentIndex: 0
                 onCurrentIndexChanged: {
-                    statepicturesourceon = Connect.logoResourceUrl(pictureSelectoron.textAt(pictureSelectoron.currentIndex));
-                    //statepicturesourceon = "file:" + pictureSelectoron.textAt(pictureSelectoron.currentIndex); // windows
-                    statepictureon.source = statepicturesourceon;
+                    if (statepicture.pictureSelectorsInitialized && currentIndex >= 0) {
+                        var selectedName = pictureSelectoron.textAt(currentIndex)
+                        statepicturesourceon = selectedName === "None" ? "" : Connect.logoResourceUrl(selectedName)
+                    }
                 }
 
 
@@ -258,7 +292,9 @@ Item {
                 width: 800 * 0.175 //140
                 height: 480 * 0.083 //40
                 text: triggervalue
-                onTextChanged: triggerofffColor();
+                validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
+                onTextChanged: triggerofffColor()
+                onEditingFinished: triggerofffColor()
                 font.pixelSize: 800 * (12 / 800)
             }
          Text{
@@ -270,7 +306,9 @@ Item {
                 width: 800 * 0.175 //140
                 height: 480 * 0.083 //40
                 text: triggeroffvalue
-                onTextChanged: triggerofffColor();
+                validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
+                onTextChanged: triggerofffColor()
+                onEditingFinished: triggerofffColor()
                 font.pixelSize: 800 * (12 / 800)
             }
 
@@ -285,8 +323,11 @@ Item {
                 width: parent.width
                 text: Translator.translate("Close", Dashboard.language)
                 onClicked: {
-                    triggervalue = triggeronvalue.text;
-                    triggeroffvalue = triggerofffvalue.text;
+                    triggerofffColor()
+                    if (!triggeronvalue.acceptableInput || triggeronvalue.text.trim().length === 0)
+                        triggeronvalue.text = Qt.locale().toString(triggervalue, 'g', 15)
+                    if (!triggerofffvalue.acceptableInput || triggerofffvalue.text.trim().length === 0)
+                        triggerofffvalue.text = Qt.locale().toString(triggeroffvalue, 'g', 15)
                     mainvaluename = powertunedatasource.get(cbxMain.currentIndex).sourcename;
                     changesize.visible = false;
             }
@@ -317,20 +358,33 @@ Item {
         }
     }
 
-function triggerofffColor()
+    function displayGifSource(source)
     {
-	    triggervalue = triggeronvalue.text;
-            triggeroffvalue = triggerofffvalue.text;
-                 
-	    if (triggervalue >= triggeroffvalue)
-	    {
+        if (source === "None" || source === "qrc:/graphics/StateGIF.gif,0")
+            return ""
+        return Connect.resolveLogoUrl(source)
+    }
 
-		    triggerofffvalue.background.color = "grey";
-	    }
-	    else
-	    {
-		    triggerofffvalue.background.color = "white";
-	    }
+    function applyTriggerInput(field, isOnTrigger)
+    {
+        if (field.acceptableInput && field.text.trim().length > 0) {
+            var value = Number.fromLocaleString(Qt.locale(), field.text)
+            if (isFinite(value)) {
+                if (isOnTrigger)
+                    triggervalue = value
+                else
+                    triggeroffvalue = value
+            }
+        }
+        field.background.color = field.acceptableInput && field.text.trim().length > 0 ? "white" : "#ffcccc"
+    }
+
+    function triggerofffColor()
+    {
+        applyTriggerInput(triggeronvalue, true)
+        applyTriggerInput(triggerofffvalue, false)
+        if (triggerofffvalue.acceptableInput && triggerofffvalue.text.trim().length > 0)
+            triggerofffvalue.background.color = triggervalue >= triggeroffvalue ? "grey" : "white"
     }
     function togglemousearea()
     {
@@ -368,15 +422,25 @@ function triggerofffColor()
     // These functions update the Picture sources in the ComboBoxes
     function updatppiclist()
     {
-                    for(var i = 0; i < pictureSelectoron.count; ++i) //
-                    if (statepicturesourceon === Connect.logoResourceUrl(pictureSelectoron.textAt(i)))
-                    pictureSelectoron.currentIndex = i
-                    updatppiclistoff()
-    }
-    function updatppiclistoff()
-    {
-                    for(var i = 0; i < pictureSelectoroff.count; ++i) //
-                    if (statepicturesourceoff === Connect.logoResourceUrl(pictureSelectoroff.textAt(i)))
-                    pictureSelectoroff.currentIndex = i
+        if (pictureSelectoron.count === 0 || pictureSelectoroff.count === 0)
+            return
+
+        var onIndex = -1
+        var offIndex = -1
+        for (var i = 0; i < pictureSelectoron.count; ++i) {
+            var onName = pictureSelectoron.textAt(i)
+            if ((statepicturesourceon === "" && onName === "None")
+                    || (onName !== "None" && statepicturesourceon === Connect.logoResourceUrl(onName)))
+                onIndex = i
+
+            var offName = pictureSelectoroff.textAt(i)
+            if ((statepicturesourceoff === "" && offName === "None")
+                    || (offName !== "None" && statepicturesourceoff === Connect.logoResourceUrl(offName)))
+                offIndex = i
+        }
+
+        pictureSelectoron.currentIndex = onIndex
+        pictureSelectoroff.currentIndex = offIndex
+        pictureSelectorsInitialized = true
     }
 }

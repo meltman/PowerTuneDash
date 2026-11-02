@@ -120,6 +120,12 @@ files are not rewritten; a later normal save/export can persist normalized
 URLs. This is a targeted compatibility rule, not a general `/home/pi`
 translation.
 
+The current dashboard record and portable-file formats are documented in
+[DASHBOARD_SCHEMA.md](DASHBOARD_SCHEMA.md). Save persists JSON through
+QSettings, while Export/Import uses separate positional text files; the
+per-element schemas are irregular, and historical records remain loadable.
+State GIF target decoding is still pending Device 0 validation.
+
 ## GPS and EC25 modem
 
 Validated target hardware includes a Quectel EC25. On Device 0, `/dev/ttyUSB1`

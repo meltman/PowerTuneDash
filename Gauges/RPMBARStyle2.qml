@@ -201,10 +201,6 @@ Rectangle {
          PathLine { x: pathLineX; y: pathLineY }
          PathArc { x: pathArcX; y: pathArcY; radiusX: pathArcXRadius; radiusY: pathArcRadius }
          PathLine { x: pathLineXFinal; y: pathLineYFinal }
-
-         Component.onCompleted: {
-             console.log(pathStartX + " " + pathStartY + " 800 width")
-         }
        }
       progress: Dashboard.rpm / Dashboard.maxRPM
     }

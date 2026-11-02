@@ -253,7 +253,9 @@ Item {
                 width: 800 * 0.175 //140
                 height: 480 * 0.083 //40
                 text: triggervalue
-                //onTextChanged: triggervalue = triggeronvalue.text
+                validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
+                onTextChanged: applyTriggerInput(triggeronvalue)
+                onEditingFinished: applyTriggerInput(triggeronvalue)
                 font.pixelSize: 800 * (12 / 800)
             }
             }
@@ -268,7 +270,9 @@ Item {
                 text: Translator.translate("Close", Dashboard.language)
                 font.pixelSize: 800 * (15 / 800)
                 onClicked: {
-                    triggervalue = triggeronvalue.text;
+                    applyTriggerInput(triggeronvalue)
+                    if (!triggeronvalue.acceptableInput || triggeronvalue.text.trim().length === 0)
+                        triggeronvalue.text = Qt.locale().toString(triggervalue, 'g', 15)
                     mainvaluename = powertunedatasource.get(cbxMain.currentIndex).sourcename;
                     changesize.visible = false;
             }
@@ -297,6 +301,16 @@ Item {
 
         }
     }
+    function applyTriggerInput(field)
+    {
+        if (field.acceptableInput && field.text.trim().length > 0) {
+            var value = Number.fromLocaleString(Qt.locale(), field.text)
+            if (isFinite(value))
+                triggervalue = value
+        }
+        field.background.color = field.acceptableInput && field.text.trim().length > 0 ? "white" : "#ffcccc"
+    }
+
     function togglemousearea()
     {
     //    //console.log("toggle" + Dashboard.draggable);

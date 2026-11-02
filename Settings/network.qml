@@ -16,6 +16,12 @@ Rectangle {
             ////console.log(Dashboard.SerialStat);
             scrollBar.increase()
         }
+        function onWifiStatChanged() {
+            wifistatus.text = Dashboard.WifiStat
+        }
+        function onEthernetStatChanged() {
+            ethernetstatus.text = Dashboard.EthernetStat
+        }
     }
     WifiCountryList {
         id: wificountrynames

@@ -60,6 +60,11 @@ unverified. Do not guess or present source inspection as runtime validation.
 * Never remove legacy behavior without proving whether it is active.
 * Do not mix large architectural refactors with hardware bring-up.
 * Preserve user-replaceable resources as external mutable data.
+* Read `docs/DASHBOARD_SCHEMA.md` before changing UserDash serialization,
+  widget creation, Save/Export/Import, element role names, or resource URL
+  handling.
+* Do not normalize dashboard elements into a single assumed schema without
+  proving each element's existing fields and reload behavior.
 * Do not add an audio server to satisfy PowerTune warning sounds; use the
   documented target ALSA backend and runtime capability check.
 * PowerTuneDash changes must be committed before BitBake consumes them.
