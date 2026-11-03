@@ -106,7 +106,9 @@ the IP-configuration error. A Wi-Fi Device `StateChanged` to state 120
 (`SUPPLICANT_CONFIG_FAILED`), and 10 (`SUPPLICANT_FAILED`) are handled as
 terminal failures; reasons 7 and 10 map to the authentication error, reason 9
 uses the generic connection error, and reasons 5 and 6 map to the
-IP-configuration error.
+IP-configuration error. Device reason 53 (`SSID_NOT_FOUND`) maps to the
+distinct message “The selected Wi-Fi network was not found. Check that it is
+in range.” It is not treated as proof of a wrong password.
 Activation state 2 (`ACTIVATED`) is success. A state read from
 `ActiveConnection.GetAll` has no failure reason, so state 4 from that property
 read is not allowed to mask the reason-bearing signal with a generic error.
@@ -117,8 +119,15 @@ applicable, and emits one warning for an authentication failure. It does not
 retry or resubmit credentials. Kernel/wpa_supplicant authentication exchanges
 may repeat before NetworkManager emits a terminal state/reason; PowerTune does
 not add a timeout or cancellation heuristic for those lower-level exchanges.
-Device 0 should be checked to confirm which terminal signal/reason NetworkManager
-1.46 reports for a rejected password.
+In the Device 0 wrong-password validation, PowerTune issued one deliberate
+request, NetworkManager/supplicant performed its internal authentication
+attempts, and NetworkManager ultimately reported Device `StateChanged` state
+120 (`FAILED`) with reason 53 (`SSID_NOT_FOUND`), followed by an activation
+failure. The newly created failed profile was then deleted successfully and
+was absent from `nmcli connection show`. PowerTune now presents the distinct
+network-not-found/in-range message for this reason; the reason is not
+reclassified as authentication failure because an actually unavailable SSID
+must remain distinguishable.
 
 New profiles are created with autoconnect disabled while authentication is in
 progress. On success, PowerTune enables autoconnect and retains the persistent

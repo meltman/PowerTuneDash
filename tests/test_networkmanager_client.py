@@ -240,6 +240,8 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         errors = qml[qml.index("function wifiErrorMessage(error)"):
                      qml.index("function ethernetStatusText()")]
         self.assertIn("Wi-Fi authentication failed. Check the password.", errors)
+        self.assertIn("The selected Wi-Fi network was not found. Check that it is in range.",
+                      errors)
         self.assertIn("Wi-Fi connected, but IP configuration failed.", errors)
         self.assertIn("NetworkManager could not connect to this Wi-Fi network.", errors)
         self.assertIn("text: extrarect.wifiErrorMessage(NetworkManager.wifiError)", qml)
@@ -365,6 +367,10 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn("Wi-Fi authentication failed. Check the password.", activation)
         self.assertIn("state == 120", device_failure)
         self.assertIn("reason == 7 || reason == 10", device_failure)
+        self.assertIn("reason == 53", device_failure)
+        self.assertIn("The selected Wi-Fi network was not found. Check that it is in range.",
+                      device_failure)
+        self.assertNotIn("reason == 53", activation)
         self.assertIn("finishConnectionAttempt(false, error)", device_failure)
         self.assertIn("state == 2", load_active)
         self.assertIn("handleActivationState(state, reason)", source)

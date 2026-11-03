@@ -1485,6 +1485,8 @@ void NetworkManagerClient::onDeviceStateChanged(uint state, uint oldState, uint 
             error = QStringLiteral("Wi-Fi authentication failed. Check the password.");
         else if (reason == 5 || reason == 6)
             error = QStringLiteral("The network did not provide a usable IP configuration.");
+        else if (reason == 53)
+            error = QStringLiteral("The selected Wi-Fi network was not found. Check that it is in range.");
         finishConnectionAttempt(false, error);
     }
     scheduleRefresh();

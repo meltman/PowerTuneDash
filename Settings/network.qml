@@ -55,6 +55,7 @@ Rectangle {
             "NetworkManager denied the connection request.",
             "NetworkManager rejected the Wi-Fi settings.",
             "The saved Wi-Fi profile is invalid.",
+            "The selected Wi-Fi network was not found. Check that it is in range.",
             "Connection cancelled.",
             "NetworkManager could not disconnect Wi-Fi."
         ]
@@ -87,7 +88,9 @@ Rectangle {
 
     Connections {
         target: NetworkManager
+        onAccessPointsChanged: networkSelector.restoreSelection()
         onWifiStateChanged: {
+            networkSelector.restoreSelection()
             if (NetworkManager.wifiError !== extrarect.observedWifiError) {
                 extrarect.observedWifiError = NetworkManager.wifiError
                 extrarect.wifiErrorDismissed = false
@@ -127,14 +130,17 @@ Rectangle {
                     height: 40
                     model: NetworkManager.accessPoints
                     textRole: "displayName"
-                    editable: true
+                    editable: false
                     enabled: NetworkManager.wifiAvailable && NetworkManager.wifiRadioEnabled
+                    currentIndex: -1
                     property var selectedAccessPoint: null
+                    property string selectedSsid: ""
+                    property string selectedPath: ""
                     property string candidateSsid: {
                         if (!selectedAccessPoint)
                             return ""
                         if (selectedAccessPoint.hidden)
-                            return editText === selectedAccessPoint.displayName ? "" : editText.trim()
+                            return hiddenSsidField.text.trim()
                         return selectedAccessPoint.ssid.trim()
                     }
                     property bool selectedAccessPointSupported: selectedAccessPoint !== null
@@ -145,8 +151,34 @@ Rectangle {
                                              && !NetworkManager.wifiConnecting
                                              && selectedAccessPointSupported
                                              && candidateSsid.length > 0
+                    function findAccessPoint(ssid, path) {
+                        var points = NetworkManager.accessPoints
+                        for (var i = 0; i < points.length; ++i) {
+                            var point = points[i]
+                            if (path.length && point.path === path)
+                                return i
+                            if (ssid.length && !point.hidden && point.ssid === ssid)
+                                return i
+                        }
+                        return -1
+                    }
+                    function restoreSelection() {
+                        var points = NetworkManager.accessPoints
+                        var connectedIndex = NetworkManager.wifiCurrentSsid.length
+                                ? findAccessPoint(NetworkManager.wifiCurrentSsid, "") : -1
+                        var wantedIndex = connectedIndex >= 0 ? connectedIndex
+                                : findAccessPoint(selectedSsid, selectedPath)
+                        currentIndex = wantedIndex
+                        selectedAccessPoint = wantedIndex >= 0 ? points[wantedIndex] : null
+                    }
                     onActivated: {
-                        selectedAccessPoint = NetworkManager.accessPoints[index]
+                        var previousPath = selectedPath
+                        var selected = NetworkManager.accessPoints[index]
+                        if (!selected.hidden || selected.path !== previousPath)
+                            hiddenSsidField.clear()
+                        selectedAccessPoint = selected
+                        selectedSsid = selectedAccessPoint.hidden ? "" : selectedAccessPoint.ssid
+                        selectedPath = selectedAccessPoint.hidden ? selectedAccessPoint.path : ""
                         extrarect.wifiErrorDismissed = true
                     }
                     delegate: ItemDelegate {
@@ -155,6 +187,15 @@ Rectangle {
                         highlighted: networkSelector.highlightedIndex == index
                         hoverEnabled: networkSelector.hoverEnabled
                     }
+                }
+                TextField {
+                    id: hiddenSsidField
+                    width: parent.width
+                    height: 40
+                    visible: networkSelector.selectedAccessPoint !== null
+                             && networkSelector.selectedAccessPoint.hidden
+                    placeholderText: qsTr("Enter hidden Wi-Fi network name")
+                    onTextChanged: extrarect.wifiErrorDismissed = true
                 }
                 Label { text: qsTr("Password") }
                 TextField {
