@@ -34,6 +34,7 @@ public:
 
 signals:
     void changed();
+    void wirelessScanResultsChanged();
     void deviceStateChanged(uint state, uint oldState, uint reason);
     void activeConnectionStateChanged(uint state, uint reason);
 

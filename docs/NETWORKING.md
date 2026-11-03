@@ -60,9 +60,26 @@ deduplicated by SSID; hidden APs remain separate by object path. Debug
 diagnostics identify scan request, relevant wireless result updates, and
 unique result count, without logging credentials or every AP.
 
-This source correction has static-test coverage but has not yet been
-revalidated on Device 0. The bounded scan timeout remains a failure safeguard,
-not the normal completion mechanism.
+Device 0 validation now confirms that scanning populates the PowerTune
+dropdown. The bounded scan timeout remains a failure safeguard, not the
+normal completion mechanism.
+
+### Device 0 connection and address status
+
+Device 0 validation confirms that PowerTune successfully creates and
+activates a NetworkManager Wi-Fi profile (`PowerTune MCPortAuthority`), that
+`wlan0` reaches connected state, and that the connection survives restarting
+`powertunedash.service`. NetworkManager owns valid IPv4 and IPv6 configuration.
+No credential leakage was observed in PowerTune logs during this validation.
+
+The PowerTune Wi-Fi address display is still empty and remains an outstanding
+defect until corrected and retested on Device 0. The source path previously
+converted `AddressData` directly with `QVariant::toList()`, then parsed only a
+`QVariantList`; like the wireless `AccessPoints` property, `AddressData` may
+arrive as a `QDBusArgument` array of `a{sv}` maps. The client now decodes both
+representations and preserves every non-empty address entry in its IPv4 and
+IPv6 properties. This source fix has static-test coverage; Device 0 display
+validation is still pending.
 
 ### Network Settings page
 

@@ -98,6 +98,52 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
             self.assertNotIn(workaround, source)
         self.assertIn("m_scanTimeout->setSingleShot(true)", source)
 
+    def test_ip_address_data_decodes_dbus_arrays_and_preserves_all_addresses(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        map_decoder = source[source.index("QVariantList variantMaps("):
+                             source.index("QStringList ipAddresses(const QVariant &entries)")]
+        self.assertIn("qMetaTypeId<QDBusArgument>()", map_decoder)
+        self.assertIn("argument.beginArray()", map_decoder)
+        self.assertIn("while (!argument.atEnd())", map_decoder)
+        self.assertIn("argument >> entry", map_decoder)
+        self.assertIn("entries.append(entry)", map_decoder)
+        address_parser = source[source.index("QStringList ipAddresses(const QVariantList &entries)"):
+                                source.index("struct AccessPointSecurity")]
+        self.assertIn("addresses.append(address)", address_parser)
+        self.assertNotIn("addresses.first()", address_parser)
+        self.assertNotIn("addresses.at(0)", address_parser)
+
+        loader = source[source.index("void NetworkManagerClient::loadIpConfiguration("):
+                        source.index("void NetworkManagerClient::loadActiveConnection(")]
+        self.assertIn('ipAddresses(properties.value(QStringLiteral("AddressData")))', loader)
+        self.assertIn("device.ipv6 = addresses", loader)
+        self.assertIn("device.ipv4 = addresses", loader)
+        self.assertIn("m_wifiIpv6 = device.ipv6", loader)
+        self.assertIn("m_wifiIpv4 = device.ipv4", loader)
+
+        address_data = [
+            {"address": "172.25.1.22"},
+            {"address": "172.25.1.23"},
+            {"address": ""},
+        ]
+        self.assertEqual(
+            [entry["address"] for entry in address_data if entry.get("address")],
+            ["172.25.1.22", "172.25.1.23"],
+        )
+
+    def test_scan_result_diagnostic_is_gated_to_explicit_scan(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        relay = source[source.index("void NetworkManagerSignalRelay::propertiesChanged("):
+                       source.index("void NetworkManagerSignalRelay::notifyDeviceStateChanged(")]
+        self.assertIn("emit wirelessScanResultsChanged()", relay)
+        self.assertNotIn("qDebug", relay)
+
+        setup = source[source.index("void NetworkManagerClient::addRelay("):
+                       source.index("void NetworkManagerClient::onNameOwnerChanged(")]
+        signal_handler = setup[setup.index("&NetworkManagerSignalRelay::wirelessScanResultsChanged"):]
+        self.assertIn("if (m_wifiScanning)", signal_handler)
+        self.assertIn("Wi-Fi scan result update detected", signal_handler)
+
     def test_access_point_security_cases(self):
         source = (ROOT / "networkmanagerclient.cpp").read_text()
         start = source.index("AccessPointSecurity classifyAccessPoint(")

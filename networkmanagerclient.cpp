@@ -91,6 +91,29 @@ QStringList ipAddresses(const QVariantList &entries)
     return addresses;
 }
 
+QVariantList variantMaps(const QVariant &value)
+{
+    const QVariant unwrapped = unwrapVariant(value);
+    if (unwrapped.userType() != qMetaTypeId<QDBusArgument>())
+        return unwrapped.toList();
+
+    QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped);
+    QVariantList entries;
+    argument.beginArray();
+    while (!argument.atEnd()) {
+        QVariantMap entry;
+        argument >> entry;
+        entries.append(entry);
+    }
+    argument.endArray();
+    return entries;
+}
+
+QStringList ipAddresses(const QVariant &entries)
+{
+    return ipAddresses(variantMaps(entries));
+}
+
 struct AccessPointSecurity {
     bool protectedNetwork;
     bool supported;
@@ -169,8 +192,7 @@ void NetworkManagerSignalRelay::propertiesChanged(const QString &interface,
          changed.contains(QStringLiteral("AccessPoints")) ||
          invalidated.contains(QStringLiteral("LastScan")) ||
          invalidated.contains(QStringLiteral("AccessPoints")))) {
-        qDebug().noquote() << QStringLiteral("Wi-Fi scan result update detected: device-path=\"%1\"")
-                              .arg(m_path);
+        emit wirelessScanResultsChanged();
     }
     emit this->changed();
 }
@@ -736,8 +758,7 @@ void NetworkManagerClient::loadIpConfiguration(const QString &path, bool ipv6, i
         if (reply.isError() || generation != m_refreshGeneration || !m_devices.contains(devicePath))
             return;
         const QVariantMap properties = reply.value();
-        const QStringList addresses = ipAddresses(
-            unwrapVariant(properties.value(QStringLiteral("AddressData"))).toList());
+        const QStringList addresses = ipAddresses(properties.value(QStringLiteral("AddressData")));
         Device &device = m_devices[devicePath];
         if (ipv6)
             device.ipv6 = addresses;
@@ -809,6 +830,13 @@ void NetworkManagerClient::addRelay(const QString &path, const QString &interfac
                           : SLOT(notifyDeviceStateChanged(uint,uint,uint)));
     }
     connect(relay, &NetworkManagerSignalRelay::changed, this, &NetworkManagerClient::onRelayChanged);
+    connect(relay, &NetworkManagerSignalRelay::wirelessScanResultsChanged,
+            this, [this, path]() {
+        if (m_wifiScanning) {
+            qDebug().noquote() << QStringLiteral("Wi-Fi scan result update detected: device-path=\"%1\"")
+                                  .arg(path);
+        }
+    });
     connect(relay, &NetworkManagerSignalRelay::deviceStateChanged,
             this, &NetworkManagerClient::onDeviceStateChanged);
     connect(relay, &NetworkManagerSignalRelay::activeConnectionStateChanged,
