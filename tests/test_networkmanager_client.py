@@ -73,7 +73,7 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn("scheduleRefresh()", refresh_chain)
         self.assertIn("device.lastScan > m_scanTimestampAtStart", source)
         self.assertIn("m_scanTimeout->stop()", source)
-        self.assertIn("emit accessPointsChanged()", source)
+        self.assertIn("publishAccessPointsIfChanged()", source)
         self.assertIn('Q_PROPERTY(QVariantList accessPoints READ accessPoints NOTIFY accessPointsChanged)', header)
 
         paths = source[source.index("QList<QDBusObjectPath> objectPaths("):
@@ -337,6 +337,7 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         for setting in ('"connection"', '"802-11-wireless"', '"ipv4"', '"ipv6"',
                         '"802-11-wireless-security"', '"psk"', '"key-mgmt"'):
             self.assertIn(f"QStringLiteral({setting})", add_method)
+        self.assertIn('QStringLiteral("autoconnect"), false', add_method)
         self.assertIn("QDBusPendingReply<QDBusObjectPath, QDBusObjectPath, QVariantMap>", add_method)
         self.assertIn('QStringLiteral("Update2")', source)
         self.assertIn("QVariant::fromValue(settings) << uint(0x1) << QVariantMap()", source)
@@ -346,6 +347,83 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
             "finishConnectionAttempt(false, safeErrorText(reply.error().name()))"), 1)
         self.assertEqual(profile_lookup.count(
             "finishConnectionAttempt(false, safeErrorText(profileReply.error().name()))"), 1)
+
+    def test_authentication_terminal_failure_clears_attempt_and_reports_once(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        header = (ROOT / "networkmanagerclient.h").read_text()
+        activation = source[source.index("void NetworkManagerClient::handleActivationState("):
+                            source.index("void NetworkManagerClient::disconnectWifi(")]
+        device_failure = source[source.index("void NetworkManagerClient::onDeviceStateChanged("):
+                                source.index("void NetworkManagerClient::onActiveConnectionStateChanged(")]
+        finish = source[source.index("void NetworkManagerClient::finishConnectionAttempt("):
+                        source.index("void NetworkManagerClient::finalizeAttemptProfile(")]
+        load_active = source[source.index("void NetworkManagerClient::loadActiveConnection("):
+                             source.index("void NetworkManagerClient::addRelay(")]
+
+        self.assertIn("state == 4", activation)
+        self.assertIn("reason == 9 || reason == 10", activation)
+        self.assertIn("Wi-Fi authentication failed. Check the password.", activation)
+        self.assertIn("state == 120", device_failure)
+        self.assertIn("reason == 7 || reason == 10", device_failure)
+        self.assertIn("finishConnectionAttempt(false, error)", device_failure)
+        self.assertIn("state == 2", load_active)
+        self.assertIn("handleActivationState(state, reason)", source)
+        self.assertIn("bool m_wifiConnecting", header)
+        self.assertIn("clearTransientCredentials()", finish)
+        self.assertIn("m_wifiConnecting = false", finish)
+        self.assertIn("Wi-Fi authentication failed: ssid=", finish)
+        self.assertNotIn("QTimer", finish)
+        self.assertNotIn("connectToWifi(", finish)
+        self.assertIn("m_profilePersistencePending", header)
+
+    def test_failed_created_profile_is_removed_and_saved_profile_is_restored(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        header = (ROOT / "networkmanagerclient.h").read_text()
+        finalizer = source[source.index("void NetworkManagerClient::finalizeAttemptProfile("):
+                           source.index("void NetworkManagerClient::deleteConnectionProfile(")]
+        delete = source[source.index("void NetworkManagerClient::deleteConnectionProfile("):
+                        source.index("void NetworkManagerClient::restoreConnectionProfile(")]
+        restore = source[source.index("void NetworkManagerClient::restoreConnectionProfile("):
+                         source.index("void NetworkManagerClient::setWifiError(")]
+        self.assertIn("m_attemptProfileCreated", finalizer)
+        self.assertIn("deleteConnectionProfile(m_attemptProfilePath)", finalizer)
+        self.assertIn("restoreConnectionProfile(m_attemptProfilePath, m_originalAttemptProfileSettings)",
+                      finalizer)
+        self.assertIn('QStringLiteral("Delete")', delete)
+        self.assertIn("m_attemptProfileCreated = false", source)
+        self.assertIn("m_attemptProfileUpdated = true", source)
+        self.assertIn("uint(0x1)", restore)
+        saved_activation = source[source.index("void NetworkManagerClient::activateSavedConnection("):
+                                 source.index("void NetworkManagerClient::addAndActivateConnection(")]
+        self.assertIn('QStringLiteral("autoconnect"), false', saved_activation)
+        self.assertIn("m_createdAttemptProfileSettings = settings", saved_activation)
+        self.assertIn("NetworkConnectionSettings m_originalAttemptProfileSettings", header)
+        self.assertIn("NetworkConnectionSettings m_createdAttemptProfileSettings", header)
+        self.assertIn("} else if (m_attemptProfileUpdated", finalizer)
+        self.assertIn("Connected Wi-Fi profile settings could not be finalized", source)
+
+        cancel = source[source.index("void NetworkManagerClient::cancelConnectionAttempt("):
+                        source.index("void NetworkManagerClient::finishConnectionAttempt(")]
+        self.assertIn("finalizeAttemptProfile(false)", cancel)
+        self.assertIn("deactivateConnection(activePath)", cancel)
+
+        clear_state = source[source.index("void NetworkManagerClient::clearDiscoveredState("):
+                            source.index("void NetworkManagerClient::refresh(")]
+        self.assertIn("m_createdAttemptProfileSettings.clear()", clear_state)
+        self.assertIn("clearTransientCredentials()", clear_state)
+
+    def test_connection_diagnostics_never_log_credentials_or_profile_dictionaries(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        for line in source.splitlines():
+            if "qInfo()" in line or "qWarning()" in line or "qDebug()" in line:
+                self.assertNotIn("m_pendingPassword", line)
+                self.assertNotIn("password)", line)
+                self.assertNotIn("settings)", line)
+                self.assertNotIn("security)", line)
+                self.assertNotIn("psk", line.lower())
+        self.assertIn('Wi-Fi connection requested: ssid=', source)
+        self.assertIn('Wi-Fi connected: device=', source)
+        self.assertIn('Wi-Fi authentication failed: ssid=', source)
 
     def test_connect_button_requires_selected_supported_network_and_ssid(self):
         qml = (ROOT / "Settings/network.qml").read_text()
@@ -361,7 +439,8 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertNotIn("&& networkSelector.currentIndex", qml)
         self.assertIn("if (!selectedAccessPoint)", qml)
         self.assertIn('return ""', qml)
-        self.assertIn('return editText === selectedAccessPoint.displayName ? "" : editText.trim()', qml)
+        self.assertIn("return hiddenSsidField.text.trim()", qml)
+        self.assertIn('editable: false', qml)
         self.assertIn("protected security unsupported", (ROOT / "networkmanagerclient.cpp").read_text())
 
         def candidate_ssid(access_point, edit_text):
@@ -381,12 +460,12 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         visible = {"hidden": False, "ssid": "Workshop", "displayName": "Workshop",
                    "supported": True}
         hidden = {"hidden": True, "ssid": "", "displayName": "Hidden network (enter SSID)",
-                  "supported": True}
+                  "supported": True, "path": "/ap/hidden"}
         unsupported = {"hidden": False, "ssid": "Enterprise", "displayName": "Enterprise",
                        "supported": False}
         cases = [
             ("visible supported AP", visible, "Workshop", "Workshop", True),
-            ("hidden AP with empty typed SSID", hidden, hidden["displayName"], "", False),
+            ("hidden AP with empty typed SSID", hidden, "", "", False),
             ("hidden AP with typed SSID", hidden, "HiddenLab", "HiddenLab", True),
             ("unsupported protected AP", unsupported, "Enterprise", "Enterprise", False),
             ("no selection with empty text", None, "", "", False),
@@ -396,6 +475,57 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(candidate_ssid(access_point, edit_text), expected_ssid)
                 self.assertEqual(can_connect(access_point, edit_text), expected_enabled)
+
+    def test_selected_ssid_survives_model_refresh_and_connected_ssid_has_priority(self):
+        qml = (ROOT / "Settings/network.qml").read_text()
+        selector = qml[qml.index("ComboBox {", qml.index('title: qsTr("Wi-Fi")')):
+                       qml.index("Label { text: qsTr(\"Password\")")]
+        self.assertIn("property string selectedSsid", selector)
+        self.assertIn("property string selectedPath", selector)
+        self.assertIn("function findAccessPoint(ssid, path)", selector)
+        self.assertIn("point.path === path", selector)
+        self.assertIn("point.ssid === ssid", selector)
+        self.assertIn("NetworkManager.wifiCurrentSsid.length", selector)
+        self.assertIn("connectedIndex >= 0 ? connectedIndex", selector)
+        self.assertIn("onAccessPointsChanged: networkSelector.restoreSelection()", qml)
+        self.assertIn("onWifiStateChanged:", qml)
+        self.assertNotIn("property int selectedIndex", selector)
+        self.assertIn("property string selectedSsid", selector)
+        restore = selector[selector.index("function restoreSelection()"):
+                           selector.index("onActivated:")]
+        self.assertNotIn("hiddenSsidField", restore)
+        self.assertIn("id: hiddenSsidField", qml)
+        self.assertIn("visible: networkSelector.selectedAccessPoint !== null", qml)
+        self.assertIn("text.trim()", selector)
+        self.assertIn("selectedAccessPoint.hidden ? selectedAccessPoint.path : \"\"", selector)
+        self.assertIn("currentIndex: -1", selector)
+        activated = selector[selector.index("onActivated:"):
+                             selector.index("delegate: ItemDelegate")]
+        self.assertIn("selected.path !== previousPath", activated)
+        self.assertIn("hiddenSsidField.clear()", activated)
+
+        def find(points, ssid="", path=""):
+            for index, point in enumerate(points):
+                if path and point.get("path") == path:
+                    return index
+                if ssid and not point.get("hidden") and point.get("ssid") == ssid:
+                    return index
+            return -1
+
+        original = [
+            {"ssid": "Alpha", "path": "/ap/alpha"},
+            {"ssid": "MCPortAuthority", "path": "/ap/mc"},
+        ]
+        reordered = list(reversed(original))
+        self.assertEqual(reordered[find(reordered, ssid="Alpha")]["ssid"], "Alpha")
+        self.assertEqual(reordered[find(reordered, ssid="MCPortAuthority")]["ssid"],
+                         "MCPortAuthority")
+        connected_index = find(reordered, ssid="MCPortAuthority")
+        saved_selection_index = find(reordered, ssid="Alpha")
+        restored_index = connected_index if connected_index >= 0 else saved_selection_index
+        self.assertEqual(reordered[restored_index]["ssid"], "MCPortAuthority")
+        self.assertEqual(find(reordered, ssid="Missing"), -1)
+        self.assertEqual(find(reordered, path="/ap/hidden"), -1)
 
     def test_connection_credentials_are_sent_to_networkmanager_not_logged(self):
         source = (ROOT / "networkmanagerclient.cpp").read_text()
@@ -413,6 +543,39 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertNotIn("qDebug() << m_pendingPassword", source)
         self.assertNotIn("qInfo() << m_pendingPassword", source)
         self.assertNotIn("wpa_supplicant", source)
+
+    def test_ui_state_notifications_publish_only_changed_snapshots(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+
+        wifi = source[source.index("void NetworkManagerClient::publishWifiStateIfChanged()"):
+                      source.index("void NetworkManagerClient::publishEthernetStateIfChanged()")]
+        ethernet = source[source.index("void NetworkManagerClient::publishEthernetStateIfChanged()"):
+                          source.index("void NetworkManagerClient::publishAccessPointsIfChanged()")]
+        access_points = source[source.index("void NetworkManagerClient::publishAccessPointsIfChanged()"):
+                               source.index("void NetworkManagerClient::setWifiError(")]
+
+        for publisher, snapshot, signal in (
+                (wifi, "m_publishedWifiState", "wifiStateChanged"),
+                (ethernet, "m_publishedEthernetState", "ethernetStateChanged")):
+            self.assertIn(f"if (published == {snapshot})", publisher)
+            self.assertLess(publisher.index(f"if (published == {snapshot})"),
+                            publisher.index(f"emit {signal}()"))
+            self.assertIn(f"{snapshot} = published", publisher)
+
+        self.assertIn("if (m_accessPoints == m_publishedAccessPoints)", access_points)
+        self.assertLess(access_points.index("if (m_accessPoints == m_publishedAccessPoints)"),
+                        access_points.index("emit accessPointsChanged()"))
+        self.assertIn("m_publishedAccessPoints = m_accessPoints", access_points)
+
+        for field in ("devicePath", "deviceName", "available", "radioEnabled", "state",
+                      "currentSsid", "ipv4", "ipv6", "scanning", "connecting", "error"):
+            self.assertIn(f'QStringLiteral("{field}")', wifi)
+        for field in ("devicePath", "deviceName", "available", "connected", "carrier",
+                      "state", "connectionName", "ipv4", "ipv6"):
+            self.assertIn(f'QStringLiteral("{field}")', ethernet)
+
+        for signal in ("wifiStateChanged", "ethernetStateChanged", "accessPointsChanged"):
+            self.assertEqual(source.count(f"emit {signal}()"), 1)
 
     def test_network_page_masks_password_and_avoids_legacy_reboot_flow(self):
         qml = (ROOT / "Settings/network.qml").read_text()

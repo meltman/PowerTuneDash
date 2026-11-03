@@ -55,7 +55,8 @@ those signals schedule the existing debounced device refresh. `AccessPoints`
 is decoded from either the native path list or a `QDBusArgument` array.
 `LastScan` advancement completes the scan after AP enumeration, and the
 resulting `QVariantList` of `QVariantMap` entries emits `accessPointsChanged`
-for the QML `ComboBox` (`textRole: "displayName"`). Visible SSIDs are
+for the QML `ComboBox` (`textRole: "displayName"`) only when its content
+differs from the last published model. Visible SSIDs are
 deduplicated by SSID; hidden APs remain separate by object path. Debug
 diagnostics identify scan request, relevant wireless result updates, and
 unique result count, without logging credentials or every AP.
@@ -64,6 +65,17 @@ Device 0 validation now confirms that scanning populates the PowerTune
 dropdown. The bounded scan timeout remains a failure safeguard, not the
 normal completion mechanism.
 
+### Change-driven QML state publication
+
+NetworkManager D-Bus events continue to refresh internal device, connection,
+address, and access-point state. Before notifying QML, the client compares the
+decoded Wi-Fi and Ethernet property groups and the complete AP model with
+their last published snapshots. Identical state produces no notification;
+actual changes publish immediately. The Wi-Fi snapshot includes the complete
+address lists, from which the bounded QML address summaries are derived.
+Refreshes do not discard or truncate backend state, and subscriptions and
+event handling remain active.
+
 ### Device 0 connection and address status
 
 Device 0 validation confirms that Wi-Fi scanning populates the AP selector,
@@ -71,17 +83,62 @@ and PowerTune can create and activate a NetworkManager Wi-Fi profile
 (`PowerTune MCPortAuthority`). NetworkManager owns profile persistence; the
 Wi-Fi connection survives restarting `powertunedash.service`. Incorrect
 credentials produce a connection error, and no credential leakage was
-observed in PowerTune logs during validation.
+observed in PowerTune logs during validation. Both physical Device 0 Ethernet
+ports have been exercised.
 
-Both physical Device 0 Ethernet ports have been exercised. PowerTune follows
-the active Ethernet interface, and NetworkManager provides addresses for
-Wi-Fi and Ethernet. The final Network page presents each discovered interface
+PowerTune follows the active Ethernet interface, and NetworkManager provides
+addresses for Wi-Fi and Ethernet. The final Network page presents each discovered interface
 with a human-readable state and consistent status colors: green for connected
 or activated, orange for connecting/configuring or carrier-only, and red for
 disconnected, unavailable, or failed. IPv4 and IPv6 summaries use separate
 bounded, elided rows. Wi-Fi authentication errors have a bounded, wrapped
 message with the actionable text “Wi-Fi authentication failed. Check the
 password.”
+
+### Wi-Fi authentication failure lifecycle
+
+The client treats NetworkManager's terminal activation/device failure as the
+end of the PowerTune attempt. An ActiveConnection `StateChanged` to state 4
+(`DEACTIVATED`) maps reason 9 (`NO_SECRETS`) and reason 10 (`LOGIN_FAILED`) to
+the actionable authentication error; reason 5 (`IP_CONFIG_INVALID`) maps to
+the IP-configuration error. A Wi-Fi Device `StateChanged` to state 120
+(`FAILED`) also ends the attempt. Device reasons 7 (`NO_SECRETS`), 9
+(`SUPPLICANT_CONFIG_FAILED`), and 10 (`SUPPLICANT_FAILED`) are handled as
+terminal failures; reasons 7 and 10 map to the authentication error, reason 9
+uses the generic connection error, and reasons 5 and 6 map to the
+IP-configuration error.
+Activation state 2 (`ACTIVATED`) is success. A state read from
+`ActiveConnection.GetAll` has no failure reason, so state 4 from that property
+read is not allowed to mask the reason-bearing signal with a generic error.
+
+On terminal failure, PowerTune clears its transient password, marks
+`wifiConnecting` false, deactivates the failed active connection when
+applicable, and emits one warning for an authentication failure. It does not
+retry or resubmit credentials. Kernel/wpa_supplicant authentication exchanges
+may repeat before NetworkManager emits a terminal state/reason; PowerTune does
+not add a timeout or cancellation heuristic for those lower-level exchanges.
+Device 0 should be checked to confirm which terminal signal/reason NetworkManager
+1.46 reports for a rejected password.
+
+New profiles are created with autoconnect disabled while authentication is in
+progress. On success, PowerTune enables autoconnect and retains the persistent
+profile. On failure or cancellation, it deactivates the attempt and deletes
+only that newly created profile. For an existing saved profile, PowerTune
+retains the original settings, temporarily disables autoconnect while the
+submitted password is tried, and restores the original profile if the attempt
+fails or is cancelled. If restoration fails, the temporary profile remains
+non-autoconnecting, preventing repeated bad-password attempts. On success, it
+persists the new settings while keeping the profile's original autoconnect
+preference; it never deletes a previously valid saved profile. The user can
+enter a corrected password and start another explicit attempt.
+
+Connection diagnostics contain only the requested SSID and discovered
+interface name, never passwords, PSKs, or connection-setting dictionaries.
+The Network page preserves the current connection/error presentation while
+also preserving selection by identity: the connected SSID takes priority;
+otherwise the user's selected visible SSID or hidden AP object path is
+resolved against each rebuilt model. No ComboBox index is stored. Hidden SSID
+text is held in its own input field and is not reset when AP results reorder.
 
 The complete IPv4 and IPv6 address arrays remain exposed by the client for
 both Wi-Fi and Ethernet. The current Network settings screen displays the

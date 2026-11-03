@@ -163,6 +163,9 @@ private:
                               const QString &devicePath);
     void addRelay(const QString &path, const QString &interface,
                   const QString &signalName = QString());
+    void publishWifiStateIfChanged();
+    void publishEthernetStateIfChanged();
+    void publishAccessPointsIfChanged();
     void setWifiError(const QString &error);
     void finishConnectionAttempt(bool success, const QString &error = QString());
     void activateSavedConnection(const QString &connectionPath,
@@ -171,6 +174,10 @@ private:
     void activateConnection(const QString &connectionPath);
     void deactivateConnection(const QString &activePath);
     void handleActivationState(uint state, uint reason);
+    void finalizeAttemptProfile(bool success);
+    void deleteConnectionProfile(const QString &path);
+    void restoreConnectionProfile(const QString &path,
+                                  const NetworkConnectionSettings &settings);
     QString safeErrorText(const QString &errorName) const;
     void clearTransientCredentials();
 
@@ -180,6 +187,9 @@ private:
     QHash<QString, Device> m_devices;
     QHash<QString, NetworkManagerSignalRelay *> m_relays;
     QVariantList m_accessPoints;
+    QVariantList m_publishedAccessPoints;
+    QVariantMap m_publishedWifiState;
+    QVariantMap m_publishedEthernetState;
     QString m_wifiDevicePath;
     QString m_ethernetDevicePath;
     QString m_wifiState;
@@ -195,6 +205,9 @@ private:
     QString m_pendingPassword;
     QString m_pendingKeyManagement;
     QString m_activeAttemptPath;
+    QString m_attemptProfilePath;
+    NetworkConnectionSettings m_originalAttemptProfileSettings;
+    NetworkConnectionSettings m_createdAttemptProfileSettings;
     bool m_managerAvailable;
     bool m_wifiRadioEnabled;
     bool m_wifiScanning;
@@ -206,6 +219,9 @@ private:
     int m_pendingProfileChecks;
     qint64 m_scanTimestampAtStart;
     bool m_matchingProfileFound;
+    bool m_attemptProfileCreated;
+    bool m_attemptProfileUpdated;
+    bool m_profilePersistencePending;
 };
 
 #endif // NETWORKMANAGERCLIENT_H

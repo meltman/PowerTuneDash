@@ -230,7 +230,10 @@ NetworkManagerClient::NetworkManagerClient(QObject *parent)
       m_pendingDeviceLoads(0),
       m_pendingProfileChecks(0),
       m_scanTimestampAtStart(-1),
-      m_matchingProfileFound(false)
+      m_matchingProfileFound(false),
+      m_attemptProfileCreated(false),
+      m_attemptProfileUpdated(false),
+      m_profilePersistencePending(false)
 {
     qDBusRegisterMetaType<NetworkConnectionSettings>();
     m_refreshTimer->setSingleShot(true);
@@ -242,7 +245,7 @@ NetworkManagerClient::NetworkManagerClient(QObject *parent)
         if (m_wifiScanning) {
             m_wifiScanning = false;
             setWifiError(QStringLiteral("Wi-Fi scan timed out."));
-            emit wifiStateChanged();
+            publishWifiStateIfChanged();
         }
     });
 
@@ -336,6 +339,12 @@ void NetworkManagerClient::clearDiscoveredState()
     m_wifiScanning = false;
     m_wifiConnecting = false;
     m_activeAttemptPath.clear();
+    m_attemptProfilePath.clear();
+    m_originalAttemptProfileSettings.clear();
+    m_createdAttemptProfileSettings.clear();
+    m_attemptProfileCreated = false;
+    m_attemptProfileUpdated = false;
+    m_profilePersistencePending = false;
     m_scanTimeout->stop();
     m_devices.clear();
     m_wifiDevicePath.clear();
@@ -350,9 +359,9 @@ void NetworkManagerClient::clearDiscoveredState()
     m_ethernetIpv4.clear();
     m_ethernetIpv6.clear();
     m_accessPoints.clear();
-    emit wifiStateChanged();
-    emit ethernetStateChanged();
-    emit accessPointsChanged();
+    publishWifiStateIfChanged();
+    publishEthernetStateIfChanged();
+    publishAccessPointsIfChanged();
     if (attemptWasActive)
         emit connectionAttemptFinished(false);
 }
@@ -425,7 +434,7 @@ void NetworkManagerClient::refreshDevices()
         const bool hardware = unwrapVariant(managerProperties.value(QStringLiteral("WirelessHardwareEnabled"))).toBool();
         if (m_wifiRadioEnabled != (enabled && hardware)) {
             m_wifiRadioEnabled = enabled && hardware;
-            emit wifiStateChanged();
+            publishWifiStateIfChanged();
         }
     });
 }
@@ -537,10 +546,10 @@ void NetworkManagerClient::finishDeviceRefresh(int generation)
         loadAccessPoints(m_devices.value(m_wifiDevicePath), generation);
     } else if (!m_accessPoints.isEmpty()) {
         m_accessPoints.clear();
-        emit accessPointsChanged();
+        publishAccessPointsIfChanged();
     }
-    emit wifiStateChanged();
-    emit ethernetStateChanged();
+    publishWifiStateIfChanged();
+    publishEthernetStateIfChanged();
 }
 
 void NetworkManagerClient::selectDevices()
@@ -639,12 +648,12 @@ void NetworkManagerClient::loadAccessPoints(const Device &device, int generation
     QVariantList results;
     if (device.accessPointPaths.isEmpty()) {
         m_accessPoints = results;
-        emit accessPointsChanged();
+        publishAccessPointsIfChanged();
         if (m_wifiScanning && device.lastScan > m_scanTimestampAtStart) {
             m_wifiScanning = false;
             m_scanTimeout->stop();
             qDebug() << "Wi-Fi scan completed: 0 unique access points";
-            emit wifiStateChanged();
+            publishWifiStateIfChanged();
         }
         return;
     }
@@ -705,13 +714,13 @@ void NetworkManagerClient::loadAccessPoints(const Device &device, int generation
                     accessPoints.append(unique->value(keys.at(i)));
                 if (generation == m_refreshGeneration) {
                     m_accessPoints = accessPoints;
-                    emit accessPointsChanged();
+                    publishAccessPointsIfChanged();
                     if (m_wifiScanning && scanCompleted) {
                         m_wifiScanning = false;
                         m_scanTimeout->stop();
                         qDebug().noquote() << QStringLiteral("Wi-Fi scan completed: %1 unique access points")
                                               .arg(accessPoints.size());
-                        emit wifiStateChanged();
+                        publishWifiStateIfChanged();
                     }
                 }
                 delete remaining;
@@ -746,8 +755,8 @@ void NetworkManagerClient::loadAccessPoint(const QString &path, int generation,
             m_accessPoints[i] = item;
         }
         Q_UNUSED(path)
-        emit accessPointsChanged();
-        emit wifiStateChanged();
+        publishAccessPointsIfChanged();
+        publishWifiStateIfChanged();
     });
 }
 
@@ -779,12 +788,12 @@ void NetworkManagerClient::loadIpConfiguration(const QString &path, bool ipv6, i
         if (devicePath == m_wifiDevicePath) {
             m_wifiIpv4 = device.ipv4;
             m_wifiIpv6 = device.ipv6;
-            emit wifiStateChanged();
+            publishWifiStateIfChanged();
         }
         if (devicePath == m_ethernetDevicePath) {
             m_ethernetIpv4 = device.ipv4;
             m_ethernetIpv6 = device.ipv6;
-            emit ethernetStateChanged();
+            publishEthernetStateIfChanged();
         }
     });
 }
@@ -810,11 +819,11 @@ void NetworkManagerClient::loadActiveConnection(const QString &path, int generat
         m_devices[devicePath].connectionName = name;
         const uint state =
             unwrapVariant(reply.value().value(QStringLiteral("State"))).toUInt();
-        if (path == m_activeAttemptPath && m_wifiConnecting)
+        if (path == m_activeAttemptPath && m_wifiConnecting && state == 2)
             handleActivationState(state, 0);
         if (devicePath == m_ethernetDevicePath) {
             m_ethernetConnectionName = name;
-            emit ethernetStateChanged();
+            publishEthernetStateIfChanged();
         }
     });
 }
@@ -902,7 +911,7 @@ void NetworkManagerClient::scanWifi()
     setWifiError(QString());
     m_scanTimestampAtStart = m_devices.value(m_wifiDevicePath).lastScan;
     m_wifiScanning = true;
-    emit wifiStateChanged();
+    publishWifiStateIfChanged();
     m_scanTimeout->start();
     qDebug().noquote() << QStringLiteral("Wi-Fi scan requested: device=\"%1\"")
                           .arg(wifiDeviceName());
@@ -919,7 +928,7 @@ void NetworkManagerClient::scanWifi()
             m_wifiScanning = false;
             m_scanTimeout->stop();
             setWifiError(QStringLiteral("NetworkManager could not scan for Wi-Fi networks."));
-            emit wifiStateChanged();
+            publishWifiStateIfChanged();
         } else {
             qDebug() << "NetworkManager accepted Wi-Fi scan request; awaiting wireless property updates";
         }
@@ -955,11 +964,22 @@ void NetworkManagerClient::connectToWifi(const QString &ssid, const QString &pas
     m_pendingSsid = ssid;
     m_pendingPassword = keyManagement == QStringLiteral("none") ? QString() : password;
     m_pendingKeyManagement = keyManagement;
+    m_attemptProfilePath.clear();
+    m_originalAttemptProfileSettings.clear();
+    m_createdAttemptProfileSettings.clear();
+    m_attemptProfileCreated = false;
+    m_attemptProfileUpdated = false;
+    m_profilePersistencePending = false;
     m_wifiConnecting = true;
     m_matchingProfileFound = false;
     m_pendingProfileChecks = 0;
     setWifiError(QString());
-    emit wifiStateChanged();
+    publishWifiStateIfChanged();
+    QString logSsid = ssid;
+    logSsid.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    logSsid.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    logSsid.replace(QLatin1Char('\r'), QLatin1Char(' '));
+    qInfo().noquote() << QStringLiteral("Wi-Fi connection requested: ssid=\"%1\"").arg(logSsid);
 
     QDBusMessage message = QDBusMessage::createMethodCall(
         QString::fromLatin1(NetworkManagerService),
@@ -1027,11 +1047,17 @@ void NetworkManagerClient::activateSavedConnection(const QString &connectionPath
         return;
     }
 
+    m_attemptProfilePath = connectionPath;
+    m_originalAttemptProfileSettings = profileSettings;
     NetworkConnectionSettings settings = profileSettings;
     QVariantMap security = settings.value(QStringLiteral("802-11-wireless-security"));
     security.insert(QStringLiteral("key-mgmt"), m_pendingKeyManagement);
     security.insert(QStringLiteral("psk"), m_pendingPassword);
     settings.insert(QStringLiteral("802-11-wireless-security"), security);
+    m_createdAttemptProfileSettings = settings;
+    QVariantMap temporaryConnection = settings.value(QStringLiteral("connection"));
+    temporaryConnection.insert(QStringLiteral("autoconnect"), false);
+    settings.insert(QStringLiteral("connection"), temporaryConnection);
 
     QDBusMessage update = QDBusMessage::createMethodCall(
         QString::fromLatin1(NetworkManagerService), connectionPath,
@@ -1040,15 +1066,19 @@ void NetworkManagerClient::activateSavedConnection(const QString &connectionPath
     QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(update), this);
     const int generation = m_connectionGeneration;
     connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, connectionPath, generation](QDBusPendingCallWatcher *finished) {
+            [this, connectionPath, generation, profileSettings](QDBusPendingCallWatcher *finished) {
         QDBusPendingReply<QVariantMap> reply = *finished;
         finished->deleteLater();
-        if (generation != m_connectionGeneration || !m_wifiConnecting)
+        if (generation != m_connectionGeneration || !m_wifiConnecting) {
+            if (!reply.isError())
+                restoreConnectionProfile(connectionPath, profileSettings);
             return;
+        }
         if (reply.isError()) {
             finishConnectionAttempt(false, safeErrorText(reply.error().name()));
             return;
         }
+        m_attemptProfileUpdated = true;
         activateConnection(connectionPath);
     });
 }
@@ -1070,7 +1100,7 @@ void NetworkManagerClient::addAndActivateConnection()
     connection.insert(QStringLiteral("id"), QStringLiteral("PowerTune %1").arg(m_pendingSsid));
     connection.insert(QStringLiteral("uuid"), QUuid::createUuid().toString(QUuid::WithoutBraces));
     connection.insert(QStringLiteral("type"), QStringLiteral("802-11-wireless"));
-    connection.insert(QStringLiteral("autoconnect"), true);
+    connection.insert(QStringLiteral("autoconnect"), false);
 
     QVariantMap wireless;
     wireless.insert(QStringLiteral("ssid"), m_pendingSsid.toUtf8());
@@ -1094,6 +1124,7 @@ void NetworkManagerClient::addAndActivateConnection()
         settings.insert(QStringLiteral("802-11-wireless-security"), security);
     }
 
+    m_createdAttemptProfileSettings = settings;
     QVariantMap options;
     options.insert(QStringLiteral("persist"), QStringLiteral("disk"));
     QDBusMessage message = QDBusMessage::createMethodCall(
@@ -1112,14 +1143,18 @@ void NetworkManagerClient::addAndActivateConnection()
         finished->deleteLater();
         if (generation != m_connectionGeneration || !m_wifiConnecting)
         {
-            if (!reply.isError())
+            if (!reply.isError()) {
                 deactivateConnection(reply.argumentAt<1>().path());
+                deleteConnectionProfile(reply.argumentAt<0>().path());
+            }
             return;
         }
         if (reply.isError()) {
             finishConnectionAttempt(false, safeErrorText(reply.error().name()));
             return;
         }
+        m_attemptProfilePath = reply.argumentAt<0>().path();
+        m_attemptProfileCreated = true;
         const QString activePath = reply.argumentAt<1>().path();
         m_activeAttemptPath = activePath;
         addRelay(activePath, QString::fromLatin1(ActiveConnectionInterface), QStringLiteral("StateChanged"));
@@ -1162,13 +1197,11 @@ void NetworkManagerClient::handleActivationState(uint state, uint reason)
 {
     if (!m_wifiConnecting)
         return;
-    if (state == 2)
+    if (state == 2) {
         finishConnectionAttempt(true);
-    else if (state == 4) {
+    } else if (state == 4) {
         QString error = QStringLiteral("NetworkManager could not connect to this Wi-Fi network.");
-        if (reason == 9)
-            error = QStringLiteral("NetworkManager needs valid Wi-Fi credentials.");
-        else if (reason == 10)
+        if (reason == 9 || reason == 10)
             error = QStringLiteral("Wi-Fi authentication failed. Check the password.");
         else if (reason == 5)
             error = QStringLiteral("The network did not provide a usable IP configuration.");
@@ -1226,8 +1259,16 @@ void NetworkManagerClient::cancelConnectionAttempt()
     m_wifiConnecting = false;
     m_activeAttemptPath.clear();
     deactivateConnection(activePath);
+    finalizeAttemptProfile(false);
+    m_attemptProfilePath.clear();
+    m_originalAttemptProfileSettings.clear();
+    m_createdAttemptProfileSettings.clear();
+    m_attemptProfileCreated = false;
+    m_attemptProfileUpdated = false;
+    m_profilePersistencePending = false;
+    qInfo().noquote() << QStringLiteral("Wi-Fi connection attempt cancelled");
     setWifiError(QStringLiteral("Connection cancelled."));
-    emit wifiStateChanged();
+    publishWifiStateIfChanged();
     emit connectionAttemptFinished(false);
 }
 
@@ -1235,13 +1276,167 @@ void NetworkManagerClient::finishConnectionAttempt(bool success, const QString &
 {
     if (!m_wifiConnecting)
         return;
+    if (success && m_profilePersistencePending)
+        return;
+    if (success && (m_attemptProfileCreated || m_attemptProfileUpdated) &&
+        !m_profilePersistencePending) {
+        m_profilePersistencePending = true;
+        NetworkConnectionSettings settings = m_createdAttemptProfileSettings;
+        if (m_attemptProfileCreated) {
+            QVariantMap connection = settings.value(QStringLiteral("connection"));
+            connection.insert(QStringLiteral("autoconnect"), true);
+            settings.insert(QStringLiteral("connection"), connection);
+        }
+        QDBusMessage update = QDBusMessage::createMethodCall(
+            QString::fromLatin1(NetworkManagerService), m_attemptProfilePath,
+            QString::fromLatin1(SettingsConnectionInterface), QStringLiteral("Update2"));
+        update << QVariant::fromValue(settings) << uint(0x1) << QVariantMap();
+        QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(update), this);
+        const int generation = m_connectionGeneration;
+        connect(watcher, &QDBusPendingCallWatcher::finished, this,
+                [this, generation, settings](QDBusPendingCallWatcher *finished) {
+            QDBusPendingReply<QVariantMap> reply = *finished;
+            finished->deleteLater();
+            if (generation != m_connectionGeneration || !m_wifiConnecting)
+                return;
+            if (reply.isError())
+                qWarning() << "Connected Wi-Fi profile settings could not be finalized";
+            else
+                m_createdAttemptProfileSettings = settings;
+            m_attemptProfileCreated = false;
+            m_attemptProfileUpdated = false;
+            m_profilePersistencePending = false;
+            finishConnectionAttempt(true);
+        });
+        return;
+    }
+
+    const QString completedSsid = m_pendingSsid;
+    const QString completedDevice = wifiDeviceName();
+    if (!success)
+        deactivateConnection(m_activeAttemptPath);
+    finalizeAttemptProfile(success);
     clearTransientCredentials();
     m_wifiConnecting = false;
     m_activeAttemptPath.clear();
+    m_attemptProfilePath.clear();
+    m_originalAttemptProfileSettings.clear();
+    m_createdAttemptProfileSettings.clear();
+    m_attemptProfileCreated = false;
+    m_attemptProfileUpdated = false;
+    m_profilePersistencePending = false;
     setWifiError(success ? QString() : error);
-    emit wifiStateChanged();
+    if (success) {
+        QString logSsid = completedSsid;
+        logSsid.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+        logSsid.replace(QLatin1Char('\n'), QLatin1Char(' '));
+        logSsid.replace(QLatin1Char('\r'), QLatin1Char(' '));
+        qInfo().noquote() << QStringLiteral("Wi-Fi connected: device=\"%1\", ssid=\"%2\"")
+                                .arg(completedDevice, logSsid);
+    } else if (error == QStringLiteral("Wi-Fi authentication failed. Check the password.")) {
+        QString logSsid = completedSsid;
+        logSsid.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+        logSsid.replace(QLatin1Char('\n'), QLatin1Char(' '));
+        logSsid.replace(QLatin1Char('\r'), QLatin1Char(' '));
+        qWarning().noquote() << QStringLiteral("Wi-Fi authentication failed: ssid=\"%1\"")
+                                .arg(logSsid);
+    }
+    publishWifiStateIfChanged();
     emit connectionAttemptFinished(success);
     scheduleRefresh();
+}
+
+void NetworkManagerClient::finalizeAttemptProfile(bool success)
+{
+    if (success)
+        return;
+    if (m_attemptProfileCreated && !m_attemptProfilePath.isEmpty()) {
+        deleteConnectionProfile(m_attemptProfilePath);
+    } else if (m_attemptProfileUpdated && !m_attemptProfilePath.isEmpty()) {
+        restoreConnectionProfile(m_attemptProfilePath, m_originalAttemptProfileSettings);
+    }
+}
+
+void NetworkManagerClient::deleteConnectionProfile(const QString &path)
+{
+    if (path.isEmpty() || path == QStringLiteral("/"))
+        return;
+    QDBusMessage message = QDBusMessage::createMethodCall(
+        QString::fromLatin1(NetworkManagerService), path,
+        QString::fromLatin1(SettingsConnectionInterface), QStringLiteral("Delete"));
+    QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(message), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [](QDBusPendingCallWatcher *finished) {
+        QDBusPendingReply<> reply = *finished;
+        if (reply.isError())
+            qWarning() << "Could not remove failed transient Wi-Fi profile";
+        finished->deleteLater();
+    });
+}
+
+void NetworkManagerClient::restoreConnectionProfile(
+    const QString &path, const NetworkConnectionSettings &settings)
+{
+    if (path.isEmpty() || path == QStringLiteral("/") || settings.isEmpty())
+        return;
+    QDBusMessage message = QDBusMessage::createMethodCall(
+        QString::fromLatin1(NetworkManagerService), path,
+        QString::fromLatin1(SettingsConnectionInterface), QStringLiteral("Update2"));
+    message << QVariant::fromValue(settings) << uint(0x1) << QVariantMap();
+    QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(message), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [](QDBusPendingCallWatcher *finished) {
+        QDBusPendingReply<QVariantMap> reply = *finished;
+        if (reply.isError())
+            qWarning() << "Could not restore saved Wi-Fi profile after failed authentication";
+        finished->deleteLater();
+    });
+}
+
+void NetworkManagerClient::publishWifiStateIfChanged()
+{
+    QVariantMap published;
+    published.insert(QStringLiteral("devicePath"), m_wifiDevicePath);
+    published.insert(QStringLiteral("deviceName"), wifiDeviceName());
+    published.insert(QStringLiteral("available"), wifiAvailable());
+    published.insert(QStringLiteral("radioEnabled"), m_wifiRadioEnabled);
+    published.insert(QStringLiteral("state"), m_wifiState);
+    published.insert(QStringLiteral("currentSsid"), m_wifiCurrentSsid);
+    published.insert(QStringLiteral("ipv4"), m_wifiIpv4);
+    published.insert(QStringLiteral("ipv6"), m_wifiIpv6);
+    published.insert(QStringLiteral("scanning"), m_wifiScanning);
+    published.insert(QStringLiteral("connecting"), m_wifiConnecting);
+    published.insert(QStringLiteral("error"), m_wifiError);
+    if (published == m_publishedWifiState)
+        return;
+    m_publishedWifiState = published;
+    emit wifiStateChanged();
+}
+
+void NetworkManagerClient::publishEthernetStateIfChanged()
+{
+    QVariantMap published;
+    published.insert(QStringLiteral("devicePath"), m_ethernetDevicePath);
+    published.insert(QStringLiteral("deviceName"), ethernetDeviceName());
+    published.insert(QStringLiteral("available"), ethernetAvailable());
+    published.insert(QStringLiteral("connected"), ethernetConnected());
+    published.insert(QStringLiteral("carrier"), ethernetCarrier());
+    published.insert(QStringLiteral("state"), m_ethernetState);
+    published.insert(QStringLiteral("connectionName"), m_ethernetConnectionName);
+    published.insert(QStringLiteral("ipv4"), m_ethernetIpv4);
+    published.insert(QStringLiteral("ipv6"), m_ethernetIpv6);
+    if (published == m_publishedEthernetState)
+        return;
+    m_publishedEthernetState = published;
+    emit ethernetStateChanged();
+}
+
+void NetworkManagerClient::publishAccessPointsIfChanged()
+{
+    if (m_accessPoints == m_publishedAccessPoints)
+        return;
+    m_publishedAccessPoints = m_accessPoints;
+    emit accessPointsChanged();
 }
 
 void NetworkManagerClient::setWifiError(const QString &error)
@@ -1249,7 +1444,7 @@ void NetworkManagerClient::setWifiError(const QString &error)
     if (m_wifiError == error)
         return;
     m_wifiError = error;
-    emit wifiStateChanged();
+    publishWifiStateIfChanged();
 }
 
 QString NetworkManagerClient::safeErrorText(const QString &errorName) const
@@ -1281,9 +1476,17 @@ void NetworkManagerClient::onRelayChanged()
 
 void NetworkManagerClient::onDeviceStateChanged(uint state, uint oldState, uint reason)
 {
-    Q_UNUSED(state)
     Q_UNUSED(oldState)
-    Q_UNUSED(reason)
+    NetworkManagerSignalRelay *relay =
+        qobject_cast<NetworkManagerSignalRelay *>(sender());
+    if (m_wifiConnecting && relay && relay->path() == m_wifiDevicePath && state == 120) {
+        QString error = QStringLiteral("NetworkManager could not connect to this Wi-Fi network.");
+        if (reason == 7 || reason == 10)
+            error = QStringLiteral("Wi-Fi authentication failed. Check the password.");
+        else if (reason == 5 || reason == 6)
+            error = QStringLiteral("The network did not provide a usable IP configuration.");
+        finishConnectionAttempt(false, error);
+    }
     scheduleRefresh();
 }
 
