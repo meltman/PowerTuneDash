@@ -1,11 +1,8 @@
 # Current PowerTune Dashboard Format (Legacy)
 
 This document describes the existing PowerTune dashboard persistence and
-portable-file formats. It is not the proposed HIVE schema. The current format
-is legacy, irregular, and has no explicit schema version.
-
-HIVE will use a deliberately documented, versioned schema. Do not retrofit
-speculative HIVE schema concepts into the current PowerTune format.
+portable-file formats. The current format is legacy, irregular, and has no
+explicit schema version.
 
 ## Persistence paths and formats
 
@@ -161,8 +158,12 @@ selects the OFF/ON GIF resources and edits the thresholds.
 The legacy source string ending in `,0` is treated as unconfigured for display.
 Loading alone does not rewrite the stored source; normal Save/Export may write
 the normalized value. Missing optional resources should not hide the widget.
-GIF decoding on Device 0 is still unverified; possible missing `libqgif.so`
-target packaging remains an open validation issue.
+This resource handling is separate from image decoding. External PNG loading,
+State GIF URL resolution, and animated GIF decoding are validated on Device 0.
+The Qt5 `qtbase` recipe's `gif` `PACKAGECONFIG` feature enables
+`/usr/lib/plugins/imageformats/libqgif.so` in `qtbase-plugins`, which is an
+explicit PowerTune runtime dependency. External animated GIF resources from
+`/var/lib/powertune/Logo/` have been verified to load and animate successfully.
 
 State GIF thresholds are numeric and support negative and decimal values.
 Invalid editor text is rejected without replacing the prior valid threshold.
