@@ -7,8 +7,9 @@ history. Use this order before architectural or platform work:
 2. `docs/AI_HANDOFF.md`
 3. `docs/IMX8_PORT.md`
 4. `docs/ARCHITECTURE_DECISIONS.md`
-5. Recent Git history
-6. `meta-powertune` documentation when working on the image/platform
+5. `docs/NETWORKING.md` before network discovery or configuration changes
+6. Recent Git history
+7. `meta-powertune` documentation when working on the image/platform
 
 ## Known-Good Baseline
 
@@ -65,6 +66,14 @@ unverified. Do not guess or present source inspection as runtime validation.
   handling.
 * Do not normalize dashboard elements into a single assumed schema without
   proving each element's existing fields and reload behavior.
+* Read `docs/NETWORKING.md` before changing network discovery, Wi-Fi
+  configuration, or Ethernet status. Keep CAN setup isolated; do not change
+  `canbitratesetup()` or CAN behavior as part of networking work.
+* The active Network settings source now uses the asynchronous QtDBus
+  `NetworkManagerClient`; the old `wifiscanner` source is excluded from the
+  build. The companion Yocto runtime package group includes the NetworkManager
+  daemon and Wi-Fi plugin. Device 0 validation is still outstanding; do not
+  treat source implementation as target validation.
 * Do not add an audio server to satisfy PowerTune warning sounds; use the
   documented target ALSA backend and runtime capability check.
 * PowerTuneDash changes must be committed before BitBake consumes them.

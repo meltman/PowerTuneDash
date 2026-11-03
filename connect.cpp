@@ -32,7 +32,7 @@
 #include "gps.h"
 #include "udpreceiver.h"
 #include "arduino.h"
-#include "wifiscanner.h"
+#include "networkmanagerclient.h"
 #include <QDebug>
 #include <QTime>
 #include <QTimer>
@@ -143,7 +143,7 @@ Connect::Connect(QObject *parent) :
     m_datalogger(Q_NULLPTR),
     m_calculations(Q_NULLPTR),
     m_arduino(Q_NULLPTR),
-    m_wifiscanner(Q_NULLPTR),
+    m_networkManager(Q_NULLPTR),
     m_extender(Q_NULLPTR),
     m_audioOutputAvailable(false)
 
@@ -162,7 +162,7 @@ Connect::Connect(QObject *parent) :
     m_datalogger = new datalogger(m_dashBoard, this);
     m_calculations = new calculations(m_dashBoard, this);
     m_arduino = new Arduino(m_dashBoard, this);
-    m_wifiscanner = new WifiScanner(m_dashBoard, this);
+    m_networkManager = new NetworkManagerClient(this);
     m_extender = new Extender(m_dashBoard, this);
    // m_wifiscanner = new WifScanner(this);
     QString mPath = "/";
@@ -193,7 +193,7 @@ Connect::Connect(QObject *parent) :
     engine->rootContext()->setContextProperty("Filemodel", fileModel);
     engine->rootContext()->setContextProperty("Apexi", m_apexi);
     engine->rootContext()->setContextProperty("Arduino", m_arduino);
-    engine->rootContext()->setContextProperty("Wifiscanner", m_wifiscanner);
+    engine->rootContext()->setContextProperty("NetworkManager", m_networkManager);
     m_appSettings->readandApplySettings();
 }
 

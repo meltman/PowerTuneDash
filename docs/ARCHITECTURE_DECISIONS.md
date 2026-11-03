@@ -260,3 +260,32 @@ redefined.
 **What not to do:** Do not add or start PulseAudio/PipeWire for warning
 sounds, remove warning thresholds or triggers, or infer target audio support
 from the build host.
+
+## PT-012 — NetworkManager-backed user networking (implemented in source)
+
+**Context:** The old settings flow assumed `wlan0`/`eth0`, scanned with a
+synchronous `iw` command, wrote credentials to a supplicant file, and rebooted
+after a connection request. Device 0 uses NetworkManager and provides QtDBus.
+
+**Decision:** The active application now uses an asynchronous QtDBus client
+for NetworkManager device discovery, on-demand Wi-Fi scans, saved/new
+connection activation, disconnection, radio/state reporting, and address
+display. NetworkManager owns persistent connection profiles and secrets. The
+old `wifiscanner` implementation is retained in source but excluded from the
+application target and QML context. The app does not scan or wait for network
+access on startup.
+
+**Evidence and status:** Source behavior and remaining target checks are
+recorded in [`NETWORKING.md`](NETWORKING.md). No build or Device 0 runtime
+validation has yet been performed. The companion
+`meta-powertune` package group now explicitly depends on
+`networkmanager-daemon` and `networkmanager-wifi`.
+
+**Compatibility impact:** Unrelated Qt HTTP clients are unchanged.
+`canbitratesetup()` and its combined WLAN/Ethernet/CAN file-writing behavior
+remain untouched; separating that legacy configuration requires an isolated,
+CAN-validated change.
+
+**What not to do:** Do not assume interface names, shell-parse `nmcli` output,
+persist credentials in PowerTune, or mix network configuration changes with
+CAN changes.

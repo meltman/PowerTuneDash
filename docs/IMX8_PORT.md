@@ -124,7 +124,33 @@ The current dashboard record and portable-file formats are documented in
 [DASHBOARD_SCHEMA.md](DASHBOARD_SCHEMA.md). Save persists JSON through
 QSettings, while Export/Import uses separate positional text files; the
 per-element schemas are irregular, and historical records remain loadable.
-State GIF target decoding is still pending Device 0 validation.
+External PNG resource loading and State GIF URL resolution are validated on
+Device 0. Animated GIF decoding is not: QML `AnimatedImage` attempts to load
+`cat-on.gif` and `cat-off.gif` but reports image-read failures, and target
+inspection found no `libqgif.so`. The Qt5 `qtbase` recipe's `gif`
+`PACKAGECONFIG` feature was disabled; the product layer now enables it. The
+plugin is provided by `qtbase-plugins`, already included in the runtime
+packagegroup, at `/usr/lib/plugins/imageformats/libqgif.so`. Actual GIF
+rendering still requires validation on Device 0 after an image built with this
+configuration is installed.
+
+## Networking
+
+Device 0 uses NetworkManager for normal networking, and the current image
+manifest contains NetworkManager, its Wi-Fi plugin, `libnm0`, `nmcli`, QtDBus,
+`iw`, and `wpa-supplicant`. PowerTune now has an asynchronous QtDBus
+NetworkManager client in source, wired to the Network settings page. The old
+fixed-name scanner and supplicant writer are excluded from the application
+target. NetworkManager owns persistent Wi-Fi profiles and credentials.
+
+This source change has not been built or validated on Device 0. D-Bus
+marshalling/authorization, scanning, connection and disconnection, radio
+status, address updates, and password persistence remain unverified. The
+`meta-powertune` runtime package group now explicitly depends on
+`networkmanager-daemon` and `networkmanager-wifi`. No CAN code or the coupled
+`canbitratesetup()` behavior was changed. See
+[NETWORKING.md](NETWORKING.md) for implementation details and the Device 0
+test matrix.
 
 ## GPS and EC25 modem
 

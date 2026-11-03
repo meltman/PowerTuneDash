@@ -1,6 +1,6 @@
 TEMPLATE = app
 
-QT += qml quick serialport serialbus network charts location positioning sensors multimedia widgets
+QT += qml quick serialport serialbus network dbus charts location positioning sensors multimedia widgets
 
 CONFIG += c++11
 
@@ -31,7 +31,7 @@ SOURCES += main.cpp \
     textprogressbar.cpp \
     udpreceiver.cpp \
     arduino.cpp \
-    wifiscanner.cpp
+    networkmanagerclient.cpp
 
 
 RESOURCES += qml.qrc
@@ -62,7 +62,7 @@ HEADERS += \
     textprogressbar.h \
     udpreceiver.h \
     arduino.h \
-    wifiscanner.h
+    networkmanagerclient.h
 
 
 FORMS +=
@@ -72,4 +72,3 @@ DISTFILES += \
     KTracks/Australia/stupid2.txt \
     KTracks/Australia/stupid3.txt \
     KTracks/Australia/stupid4.txt
-

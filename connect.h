@@ -41,7 +41,7 @@ class GoPro;
 class GPS;
 class udpreceiver;
 class Arduino;
-class WifiScanner;
+class NetworkManagerClient;
 class Extender;
 
 class Connect : public QObject
@@ -117,7 +117,7 @@ private:
     QFileSystemModel *dirModel;
     QFileSystemModel *fileModel;
     Arduino *m_arduino;
-    WifiScanner *m_wifiscanner;
+    NetworkManagerClient *m_networkManager;
     Extender *m_extender;
     bool m_audioOutputAvailable;
 

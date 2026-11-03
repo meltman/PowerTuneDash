@@ -1,6 +1,5 @@
 import QtQuick 2.8
 import QtQuick.Controls 2.1
-import Qt.labs.settings 1.0
 import QtQuick.Controls 1.4 as Quick1
 import QtQuick.Controls.Styles 1.4
 import "qrc:/Translator.js" as Translator
@@ -9,27 +8,7 @@ Rectangle {
     id: extrarect
     anchors.fill: parent
     color: "grey"
-    Connections {
-        target: Dashboard
-        function onSerialStatChanged() {
-            consoleText.append(Dashboard.SerialStat)
-            ////console.log(Dashboard.SerialStat);
-            scrollBar.increase()
-        }
-        function onWifiStatChanged() {
-            wifistatus.text = Dashboard.WifiStat
-        }
-        function onEthernetStatChanged() {
-            ethernetstatus.text = Dashboard.EthernetStat
-        }
-    }
-    WifiCountryList {
-        id: wificountrynames
-    }
-
-    Settings {
-        property alias wificountryindex: wificountrycbx.currentIndex
-    }
+    Component.onCompleted: NetworkManager.refresh()
 
     Flickable {
         id: flickable
@@ -70,125 +49,143 @@ Rectangle {
         }
         Button {
             id: btnScanNetwork
-            // visible: false
-            text: Translator.translate("Scan WIFI", Dashboard.language)
+            text: NetworkManager.wifiScanning ? qsTr("Scanning...") : qsTr("Scan Wi-Fi")
             width: extrarect.width / 5
             height: extrarect.height / 15
             font.pixelSize: extrarect.width / 55
+            enabled: NetworkManager.managerAvailable && NetworkManager.wifiAvailable
+                     && NetworkManager.wifiRadioEnabled && !NetworkManager.wifiScanning
             onClicked: {
                 consoleText.clear()
-                Wifiscanner.initializeWifiscanner()
-                //btnScanNetwork.enabled =false;
+                NetworkManager.scanWifi()
             }
         }
-        Component.onCompleted: Wifiscanner.initializeWifiscanner() // Workarround to show initial values
         Text {
-            text: Translator.translate("WIFI Country", Dashboard.language)
+            text: qsTr("Wi-Fi network")
             font.pixelSize: extrarect.width / 55
         }
         ComboBox {
-            id: wificountrycbx
-            //visible: false
+            id: networkSelector
             width: extrarect.width / 5
             height: extrarect.height / 15
             font.pixelSize: extrarect.width / 55
-            model: wificountrynames
-            textRole: "name"
-            property bool initialized: true
-        }
-        Text {
-            text: Translator.translate("WIFI 1", Dashboard.language)
-            font.pixelSize: extrarect.width / 55
-        }
-        ComboBox {
-            id: wifilistbox
-            //visible: false
-            width: extrarect.width / 5
-            height: extrarect.height / 15
-            font.pixelSize: extrarect.width / 55
-            model: Dashboard.wifi
-            onCountChanged: btnScanNetwork.enabled = true
-            property bool initialized: false
+            model: NetworkManager.accessPoints
+            textRole: "displayName"
+            editable: true
+            enabled: NetworkManager.wifiAvailable && NetworkManager.wifiRadioEnabled
+            property var selectedAccessPoint: null
+            property string candidateSsid: {
+                if (!selectedAccessPoint)
+                    return ""
+                if (selectedAccessPoint.hidden)
+                    return editText === selectedAccessPoint.displayName ? "" : editText.trim()
+                return selectedAccessPoint.ssid.trim()
+            }
+            property bool selectedAccessPointSupported: selectedAccessPoint !== null
+                                                       && selectedAccessPoint.supported
+            property bool canConnect: NetworkManager.managerAvailable
+                                     && NetworkManager.wifiAvailable
+                                     && NetworkManager.wifiRadioEnabled
+                                     && !NetworkManager.wifiConnecting
+                                     && selectedAccessPointSupported
+                                     && candidateSsid.length > 0
+            onActivated: selectedAccessPoint = NetworkManager.accessPoints[index]
             delegate: ItemDelegate {
-                width: wifilistbox.width
-                text: wifilistbox.textRole ? (Array.isArray(
-                                                  control.model) ? modelData[control.textRole] : model[control.textRole]) : modelData
-                font.weight: wifilistbox.currentIndex == index ? Font.DemiBold : Font.Normal
-                font.family: wifilistbox.font.family
-                font.pixelSize: wifilistbox.font.pixelSize
-                highlighted: wifilistbox.highlightedIndex == index
-                hoverEnabled: wifilistbox.hoverEnabled
+                width: networkSelector.width
+                text: modelData.displayName
+                font.pixelSize: networkSelector.font.pixelSize
+                highlighted: networkSelector.highlightedIndex == index
+                hoverEnabled: networkSelector.hoverEnabled
             }
         }
         Text {
-
-            text: Translator.translate("Password 1", Dashboard.language)
+            text: qsTr("Password")
             font.pixelSize: extrarect.width / 55
         }
         TextField {
             id: pw1
-            placeholderText: qsTr("Passphrase")
+            placeholderText: qsTr("Wi-Fi password (if required)")
             width: extrarect.width / 5
             font.pixelSize: extrarect.width / 55
+            echoMode: TextInput.Password
+            inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+            enabled: NetworkManager.wifiAvailable && NetworkManager.wifiRadioEnabled
         }
 
-
-        /*
-        Text { text: "Wifi 2 :"
-            //visible: false
-            font.pixelSize: extrarect.width / 55 }
-        ComboBox {
-            id: wifilistbox2
-            //visible: false
-            width: extrarect.width / 5
-            height: extrarect.height /15
-            font.pixelSize: extrarect.width / 55
-            model: Dashboard.wifi
-            onCountChanged: btnScanNetwork.enabled =true;
-            property bool initialized: false
-            delegate: ItemDelegate {
-                width: wifilistbox2.width
-                text: wifilistbox2.textRole ? (Array.isArray(control.model) ? modelData[control.textRole] : model[control.textRole]) : modelData
-                font.weight: wifilistbox2.currentIndex == index ? Font.DemiBold : Font.Normal
-                font.family: wifilistbox2.font.family
-                font.pixelSize: wifilistbox2.font.pixelSize
-                highlighted: wifilistbox2.highlightedIndex == index
-                hoverEnabled: wifilistbox2.hoverEnabled
-            }
-        }
         Text {
-            text: "Password :"
-            font.pixelSize: extrarect.width / 55 }
-        TextField {
-            id: pw2
-            placeholderText: qsTr("Passphrase")
-            width: extrarect.width / 5
-            font.pixelSize: extrarect.width / 55 }*/
-        Text {
-            text: " "
+            text: qsTr("Connection")
             font.pixelSize: extrarect.width / 55
         }
 
         Button {
             id: applyWifiSettings
-            text: Translator.translate("Connect WIFI", Dashboard.language)
+            text: NetworkManager.wifiConnecting ? qsTr("Connecting...") : qsTr("Connect")
             width: extrarect.width / 5
             height: extrarect.height / 15
             font.pixelSize: extrarect.width / 55
-            Component.onCompleted: {
-
-                //Wifiscanner.findActiveWirelesses();
-                // Wifiscanner.initializeWifiscanner()
-            }
+            enabled: networkSelector.canConnect
             onClicked: {
-                //Wifiscanner.setwifi(wificountrynames.get(wificountrycbx.currentIndex).countryname,wifilistbox.textAt(wifilistbox.currentIndex),pw1.text,wifilistbox2.textAt(wifilistbox2.currentIndex),pw2.text );
-                Wifiscanner.setwifi(
-                            wificountrynames.get(
-                                wificountrycbx.currentIndex).countryname,
-                            wifilistbox.textAt(wifilistbox.currentIndex),
-                            pw1.text, "placeholder", "placeholder")
-                Connect.reboot()
+                NetworkManager.connectToWifi(networkSelector.candidateSsid, pw1.text,
+                                             networkSelector.selectedAccessPoint.keyManagement)
+                pw1.clear()
             }
+        }
+        Text {
+            text: " "
+            font.pixelSize: extrarect.width / 55
+        }
+        Row {
+            width: extrarect.width / 5
+            spacing: extrarect.width / 100
+            Button {
+                text: qsTr("Disconnect")
+                height: extrarect.height / 15
+                font.pixelSize: extrarect.width / 55
+                enabled: NetworkManager.wifiState == "connected"
+                onClicked: NetworkManager.disconnectWifi()
+            }
+            Button {
+                text: qsTr("Cancel")
+                height: extrarect.height / 15
+                font.pixelSize: extrarect.width / 55
+                visible: NetworkManager.wifiConnecting
+                onClicked: NetworkManager.cancelConnectionAttempt()
+            }
+        }
+        Text {
+            text: qsTr("Wi-Fi status")
+            font.pixelSize: extrarect.width / 55
+        }
+        Text {
+            text: !NetworkManager.managerAvailable ? qsTr("NetworkManager unavailable")
+                  : !NetworkManager.wifiAvailable ? qsTr("Wi-Fi unavailable")
+                  : !NetworkManager.wifiRadioEnabled ? qsTr("Wi-Fi radio disabled")
+                  : NetworkManager.wifiCurrentSsid.length
+                    ? NetworkManager.wifiState + " - " + NetworkManager.wifiCurrentSsid
+                    : NetworkManager.wifiState
+            font.pixelSize: extrarect.width / 60
+            elide: Text.ElideRight
+        }
+        Text {
+            text: qsTr("Wi-Fi addresses")
+            font.pixelSize: extrarect.width / 55
+        }
+        Text {
+            text: NetworkManager.wifiIpv4Addresses.concat(NetworkManager.wifiIpv6Addresses).join(", ")
+            font.pixelSize: extrarect.width / 60
+            elide: Text.ElideRight
+        }
+        Text {
+            text: NetworkManager.wifiError
+            color: "darkred"
+            font.pixelSize: extrarect.width / 60
+            elide: Text.ElideRight
+            visible: text.length > 0
+        }
+        Text {
+            text: " "
+            font.pixelSize: extrarect.width / 55
+            visible: !NetworkManager.wifiError.length
         }
 
         Text {
@@ -264,7 +261,10 @@ Rectangle {
 
         Quick1.Button {
             id: ethernetstatus
-            text: Dashboard.EthernetStat
+            text: NetworkManager.ethernetAvailable
+                  ? NetworkManager.ethernetDeviceName + ": " + NetworkManager.ethernetState
+                    + " " + NetworkManager.ethernetIpv4Addresses.concat(NetworkManager.ethernetIpv6Addresses).join(", ")
+                  : qsTr("Ethernet unavailable")
             width: extrarect.width / 5
             height: extrarect.height / 15
             style: ButtonStyle {
@@ -277,7 +277,8 @@ Rectangle {
                 }
                 background: Rectangle {
                     color: {
-                        (ethernetstatus.text == "NOT CONNECTED") ? "red" : "green"
+                        NetworkManager.ethernetState == "connected" ? "green"
+                          : NetworkManager.ethernetState.indexOf("link up") >= 0 ? "orange" : "red"
                     }
                     border.width: control.activeFocus ? 2 : 1
                     border.color: "#888"
@@ -293,7 +294,9 @@ Rectangle {
         }
         Quick1.Button {
             id: wifistatus
-            text: Dashboard.WifiStat
+            text: NetworkManager.wifiCurrentSsid.length
+                  ? NetworkManager.wifiDeviceName + ": " + NetworkManager.wifiCurrentSsid
+                  : NetworkManager.wifiDeviceName + ": " + NetworkManager.wifiState
             width: extrarect.width / 5
             height: extrarect.height / 15
             style: ButtonStyle {
@@ -306,7 +309,7 @@ Rectangle {
                 }
                 background: Rectangle {
                     color: {
-                        (wifistatus.text == "NOT CONNECTED") ? "red" : "green"
+                        NetworkManager.wifiState == "connected" ? "green" : "red"
                     }
                     border.width: control.activeFocus ? 2 : 1
                     border.color: "#888"
