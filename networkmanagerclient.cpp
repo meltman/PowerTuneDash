@@ -47,7 +47,7 @@ QList<QDBusObjectPath> objectPaths(const QVariant &value)
 {
     const QVariant unwrapped = unwrapVariant(value);
     if (unwrapped.userType() == qMetaTypeId<QDBusArgument>()) {
-        QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped);
+        const QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped);
         QList<QDBusObjectPath> paths;
         argument.beginArray();
         while (!argument.atEnd()) {
@@ -97,7 +97,7 @@ QVariantList variantMaps(const QVariant &value)
     if (unwrapped.userType() != qMetaTypeId<QDBusArgument>())
         return unwrapped.toList();
 
-    QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped);
+    const QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped);
     QVariantList entries;
     argument.beginArray();
     while (!argument.atEnd()) {
@@ -111,7 +111,10 @@ QVariantList variantMaps(const QVariant &value)
 
 QStringList ipAddresses(const QVariant &entries)
 {
-    return ipAddresses(variantMaps(entries));
+    const QVariant unwrapped = unwrapVariant(entries);
+    if (unwrapped.userType() != qMetaTypeId<QDBusArgument>())
+        return ipAddresses(unwrapped.toList());
+    return ipAddresses(variantMaps(unwrapped));
 }
 
 struct AccessPointSecurity {
@@ -272,6 +275,15 @@ bool NetworkManagerClient::wifiConnecting() const { return m_wifiConnecting; }
 QString NetworkManagerClient::wifiError() const { return m_wifiError; }
 QVariantList NetworkManagerClient::accessPoints() const { return m_accessPoints; }
 bool NetworkManagerClient::ethernetAvailable() const { return !m_ethernetDevicePath.isEmpty(); }
+bool NetworkManagerClient::ethernetConnected() const
+{
+    return ethernetAvailable() && m_devices.value(m_ethernetDevicePath).state == 100;
+}
+bool NetworkManagerClient::ethernetCarrier() const
+{
+    return ethernetAvailable() && m_devices.value(m_ethernetDevicePath).state != 20 &&
+           m_devices.value(m_ethernetDevicePath).carrier;
+}
 QString NetworkManagerClient::ethernetDeviceName() const { return m_devices.value(m_ethernetDevicePath).interfaceName; }
 QString NetworkManagerClient::ethernetState() const { return m_ethernetState; }
 QString NetworkManagerClient::ethernetConnectionName() const { return m_ethernetConnectionName; }

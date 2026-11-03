@@ -66,6 +66,8 @@ class NetworkManagerClient : public QObject
     Q_PROPERTY(QString wifiError READ wifiError NOTIFY wifiStateChanged)
     Q_PROPERTY(QVariantList accessPoints READ accessPoints NOTIFY accessPointsChanged)
     Q_PROPERTY(bool ethernetAvailable READ ethernetAvailable NOTIFY ethernetStateChanged)
+    Q_PROPERTY(bool ethernetConnected READ ethernetConnected NOTIFY ethernetStateChanged)
+    Q_PROPERTY(bool ethernetCarrier READ ethernetCarrier NOTIFY ethernetStateChanged)
     Q_PROPERTY(QString ethernetDeviceName READ ethernetDeviceName NOTIFY ethernetStateChanged)
     Q_PROPERTY(QString ethernetState READ ethernetState NOTIFY ethernetStateChanged)
     Q_PROPERTY(QString ethernetConnectionName READ ethernetConnectionName NOTIFY ethernetStateChanged)
@@ -89,6 +91,8 @@ public:
     QString wifiError() const;
     QVariantList accessPoints() const;
     bool ethernetAvailable() const;
+    bool ethernetConnected() const;
+    bool ethernetCarrier() const;
     QString ethernetDeviceName() const;
     QString ethernetState() const;
     QString ethernetConnectionName() const;

@@ -103,13 +103,19 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         map_decoder = source[source.index("QVariantList variantMaps("):
                              source.index("QStringList ipAddresses(const QVariant &entries)")]
         self.assertIn("qMetaTypeId<QDBusArgument>()", map_decoder)
+        self.assertIn("const QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped)", map_decoder)
         self.assertIn("argument.beginArray()", map_decoder)
         self.assertIn("while (!argument.atEnd())", map_decoder)
         self.assertIn("argument >> entry", map_decoder)
         self.assertIn("entries.append(entry)", map_decoder)
+        self.assertNotIn("\n    QDBusArgument argument =", map_decoder)
+        self.assertIn("return unwrapped.toList()", map_decoder)
         address_parser = source[source.index("QStringList ipAddresses(const QVariantList &entries)"):
                                 source.index("struct AccessPointSecurity")]
         self.assertIn("addresses.append(address)", address_parser)
+        self.assertIn("!addresses.contains(address)", address_parser)
+        self.assertIn("unwrapVariant(value).toMap()", source)
+        self.assertIn("return ipAddresses(unwrapped.toList())", source)
         self.assertNotIn("addresses.first()", address_parser)
         self.assertNotIn("addresses.at(0)", address_parser)
 
@@ -124,12 +130,55 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         address_data = [
             {"address": "172.25.1.22"},
             {"address": "172.25.1.23"},
+            {"address": "172.25.1.22"},
             {"address": ""},
         ]
-        self.assertEqual(
-            [entry["address"] for entry in address_data if entry.get("address")],
-            ["172.25.1.22", "172.25.1.23"],
-        )
+        self.assertEqual(list(dict.fromkeys(entry["address"] for entry in address_data
+                                            if entry.get("address"))),
+                         ["172.25.1.22", "172.25.1.23"])
+        ipv6_data = [
+            {"address": "2001:db8::1"},
+            {"address": "2001:db8::2"},
+            {"address": "2001:db8::1"},
+            {"address": "fe80::1"},
+        ]
+        self.assertEqual(list(dict.fromkeys(entry["address"] for entry in ipv6_data
+                                            if entry.get("address"))),
+                         ["2001:db8::1", "2001:db8::2", "fe80::1"])
+
+    def test_address_summary_is_bounded_and_prefers_global_ipv6(self):
+        qml = (ROOT / "Settings/network.qml").read_text()
+        self.assertIn("function firstIpv4Address(addresses)", qml)
+        self.assertIn("return addresses.length ? addresses[0] : \"\"", qml)
+        self.assertIn("function preferredIpv6Address(addresses)", qml)
+        self.assertIn("!/^fe[89ab]/i.test(addresses[i])", qml)
+        self.assertIn("return firstLinkLocal", qml)
+        self.assertIn("function addressSummary(ipv4, ipv6)", qml)
+        self.assertIn("width: parent.width", qml)
+        self.assertIn("elide: Text.ElideRight", qml)
+        self.assertIn("wrapMode: Text.NoWrap", qml)
+        self.assertNotIn("wifiIpv4Addresses.concat(NetworkManager.wifiIpv6Addresses).join", qml)
+        self.assertNotIn("ethernetIpv4Addresses.concat(NetworkManager.ethernetIpv6Addresses).join", qml)
+
+        def display_ipv6(addresses):
+            return next((address for address in addresses
+                         if not address.lower().startswith(("fe8", "fe9", "fea", "feb"))),
+                        next(iter(addresses), ""))
+
+        self.assertEqual(display_ipv6(["fe80::1", "2001:db8::1"]), "2001:db8::1")
+        self.assertEqual(display_ipv6(["fe80::1", "fe90::1"]), "fe80::1")
+
+    def test_ethernet_color_uses_networkmanager_activation_and_carrier(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        header = (ROOT / "networkmanagerclient.h").read_text()
+        self.assertIn("Q_PROPERTY(bool ethernetConnected READ ethernetConnected", header)
+        self.assertIn("Q_PROPERTY(bool ethernetCarrier READ ethernetCarrier", header)
+        self.assertIn("m_devices.value(m_ethernetDevicePath).state == 100", source)
+        self.assertIn("m_devices.value(m_ethernetDevicePath).state != 20", source)
+        self.assertIn("m_devices.value(m_ethernetDevicePath).carrier", source)
+        qml = (ROOT / "Settings/network.qml").read_text()
+        self.assertIn('NetworkManager.ethernetConnected ? "green"', qml)
+        self.assertIn('NetworkManager.ethernetCarrier ? "orange" : "red"', qml)
 
     def test_scan_result_diagnostic_is_gated_to_explicit_scan(self):
         source = (ROOT / "networkmanagerclient.cpp").read_text()
@@ -227,7 +276,8 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn("networkSelector.candidateSsid, pw1.text", qml)
         self.assertNotIn("currentIndex < 0", qml)
         self.assertNotIn("&& networkSelector.currentIndex", qml)
-        self.assertIn("if (!selectedAccessPoint)\n                    return \"\"", qml)
+        self.assertIn("if (!selectedAccessPoint)", qml)
+        self.assertIn('return ""', qml)
         self.assertIn('return editText === selectedAccessPoint.displayName ? "" : editText.trim()', qml)
         self.assertIn("protected security unsupported", (ROOT / "networkmanagerclient.cpp").read_text())
 
@@ -290,6 +340,20 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn("NetworkManager.disconnectWifi()", qml)
         self.assertNotIn("Wifiscanner", qml)
         self.assertNotIn("Connect.reboot()", qml)
+
+    def test_network_page_removes_console_and_bounds_network_sections(self):
+        qml = (ROOT / "Settings/network.qml").read_text()
+        self.assertNotIn("Flickable", qml)
+        self.assertNotIn("TextArea.flickable", qml)
+        self.assertNotIn("consoleText", qml)
+        self.assertIn('title: qsTr("Wi-Fi")', qml)
+        self.assertIn('title: qsTr("Ethernet")', qml)
+        self.assertIn('title: qsTr("PowerTune")', qml)
+        self.assertIn("text: NetworkManager.wifiError", qml)
+        self.assertIn("NetworkManager.scanWifi()", qml)
+        self.assertIn("width: parent.width", qml)
+        self.assertGreaterEqual(qml.count("elide: Text.ElideRight"), 4)
+        self.assertGreaterEqual(qml.count("wrapMode: Text.NoWrap"), 3)
 
     def test_can_configuration_function_is_not_rewritten_by_this_change(self):
         source = (ROOT / "connect.cpp").read_text()

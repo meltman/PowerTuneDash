@@ -69,17 +69,28 @@ normal completion mechanism.
 Device 0 validation confirms that PowerTune successfully creates and
 activates a NetworkManager Wi-Fi profile (`PowerTune MCPortAuthority`), that
 `wlan0` reaches connected state, and that the connection survives restarting
-`powertunedash.service`. NetworkManager owns valid IPv4 and IPv6 configuration.
-No credential leakage was observed in PowerTune logs during this validation.
+`powertunedash.service`. Device 0 also confirms Ethernet can reach connected
+NetworkManager state with multiple IPv4 and IPv6 addresses. NetworkManager
+owns the Wi-Fi and Ethernet address configurations. No credential leakage was
+observed in PowerTune logs during Wi-Fi validation.
 
-The PowerTune Wi-Fi address display is still empty and remains an outstanding
-defect until corrected and retested on Device 0. The source path previously
-converted `AddressData` directly with `QVariant::toList()`, then parsed only a
-`QVariantList`; like the wireless `AccessPoints` property, `AddressData` may
-arrive as a `QDBusArgument` array of `a{sv}` maps. The client now decodes both
-representations and preserves every non-empty address entry in its IPv4 and
-IPv6 properties. This source fix has static-test coverage; Device 0 display
-validation is still pending.
+The complete IPv4 and IPv6 address arrays remain exposed by the client for
+both Wi-Fi and Ethernet. The current Network settings screen is intentionally
+bounded: it displays the first address in NetworkManager's returned order
+for IPv4, and the first non-link-local IPv6 address (falling back to the first
+link-local address if no global address is present). This display-only choice
+does not filter or reorder the backend arrays. Labels are single-line and
+elided within fixed widths. Ethernet color follows NetworkManager state:
+activated is green, carrier without activation is orange, and missing,
+unavailable, or down is red.
+
+The previous `AddressData` decoder attempted `beginArray()` on a non-const
+`QDBusArgument` copy, selecting QtDBus's write-side overload on a read-only
+received argument. The decoder now uses a const read-side argument for array
+and map extraction, while accepting native QVariant lists/maps. It keeps all
+non-empty addresses and removes duplicates. The correction and bounded UI
+summary have static-test coverage, but clean D-Bus decoding and the displayed
+addresses still require Device 0 retest.
 
 ### Network Settings page
 
@@ -127,10 +138,10 @@ profile may be activated without a newly entered password. Activation
 completion uses active connection states 2 (activated) and 4 (deactivated),
 with reason codes interpreted using `NMActiveConnectionStateReason`.
 
-These are source-level implementation facts only. D-Bus signatures and
-marshalling, target authorization, actual scanning/connection, virtual
-keyboard behavior, secret persistence, and state/address updates still need
-Device 0 validation. `wifiscanner.cpp` remains in the tree but is neither
+The Device 0 evidence above validates scanning, connection persistence, and
+NetworkManager Wi-Fi/Ethernet connectivity. Clean D-Bus address decoding and
+the bounded address presentation still need to be verified on Device 0 after
+this correction. `wifiscanner.cpp` remains in the tree but is neither
 compiled nor exposed to QML.
 
 ## Device 0 and image integration evidence
