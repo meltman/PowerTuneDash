@@ -14,6 +14,63 @@ Rectangle {
         return addresses.length ? addresses[0] : ""
     }
 
+    function stateLabel(state) {
+        return state.length ? state.charAt(0).toUpperCase() + state.slice(1)
+                            : qsTr("Unavailable")
+    }
+
+    function wifiStatusColor() {
+        if (!NetworkManager.managerAvailable || !NetworkManager.wifiAvailable
+                || !NetworkManager.wifiRadioEnabled)
+            return "red"
+        if (NetworkManager.wifiState === "connected")
+            return "green"
+        if (NetworkManager.wifiConnecting
+                || ["preparing", "configuring", "waiting for credentials", "configuring IP",
+                    "checking connection", "finishing connection"].indexOf(NetworkManager.wifiState) >= 0)
+            return "orange"
+        return "red"
+    }
+
+    function wifiErrorMessage(error) {
+        if (error === "Wi-Fi authentication failed. Check the password.")
+            return qsTr("Wi-Fi authentication failed. Check the password.")
+        if (error === "The network did not provide a usable IP configuration.")
+            return qsTr("Wi-Fi connected, but IP configuration failed.")
+        if (error === "NetworkManager could not connect. Check the network and credentials.")
+            return qsTr("NetworkManager could not connect to this Wi-Fi network.")
+        var knownSafeErrors = [
+            "System D-Bus is unavailable.",
+            "Could not discover NetworkManager devices.",
+            "NetworkManager is unavailable.",
+            "No Wi-Fi device is available.",
+            "Wi-Fi is disabled.",
+            "Wi-Fi is not connected.",
+            "NetworkManager could not scan for Wi-Fi networks.",
+            "Wi-Fi scan timed out.",
+            "Wi-Fi is not available.",
+            "Select a network before connecting.",
+            "This Wi-Fi security type is not supported.",
+            "NetworkManager needs valid Wi-Fi credentials.",
+            "NetworkManager denied the connection request.",
+            "NetworkManager rejected the Wi-Fi settings.",
+            "The saved Wi-Fi profile is invalid.",
+            "Connection cancelled.",
+            "NetworkManager could not disconnect Wi-Fi."
+        ]
+        return knownSafeErrors.indexOf(error) >= 0
+                ? error : qsTr("NetworkManager could not connect to this Wi-Fi network.")
+    }
+
+    function ethernetStatusText() {
+        if (!NetworkManager.ethernetAvailable)
+            return qsTr("Ethernet unavailable")
+        var state = NetworkManager.ethernetConnected ? qsTr("Connected")
+                   : NetworkManager.ethernetCarrier ? qsTr("Link up")
+                   : stateLabel(NetworkManager.ethernetState)
+        return NetworkManager.ethernetDeviceName + ": " + state
+    }
+
     function preferredIpv6Address(addresses) {
         var firstLinkLocal = ""
         for (var i = 0; i < addresses.length; ++i) {
@@ -25,10 +82,17 @@ Rectangle {
         return firstLinkLocal
     }
 
-    function addressSummary(ipv4, ipv6) {
-        var v4 = firstIpv4Address(ipv4)
-        var v6 = preferredIpv6Address(ipv6)
-        return "IPv4: " + (v4 || "-") + "  IPv6: " + (v6 || "-")
+    property bool wifiErrorDismissed: false
+    property string observedWifiError: NetworkManager.wifiError
+
+    Connections {
+        target: NetworkManager
+        onWifiStateChanged: {
+            if (NetworkManager.wifiError !== extrarect.observedWifiError) {
+                extrarect.observedWifiError = NetworkManager.wifiError
+                extrarect.wifiErrorDismissed = false
+            }
+        }
     }
 
     Row {
@@ -81,7 +145,10 @@ Rectangle {
                                              && !NetworkManager.wifiConnecting
                                              && selectedAccessPointSupported
                                              && candidateSsid.length > 0
-                    onActivated: selectedAccessPoint = NetworkManager.accessPoints[index]
+                    onActivated: {
+                        selectedAccessPoint = NetworkManager.accessPoints[index]
+                        extrarect.wifiErrorDismissed = true
+                    }
                     delegate: ItemDelegate {
                         width: networkSelector.width
                         text: modelData.displayName
@@ -107,6 +174,7 @@ Rectangle {
                         height: 40
                         enabled: networkSelector.canConnect
                         onClicked: {
+                            extrarect.wifiErrorDismissed = true
                             NetworkManager.connectToWifi(networkSelector.candidateSsid, pw1.text,
                                                          networkSelector.selectedAccessPoint.keyManagement)
                             pw1.clear()
@@ -122,37 +190,62 @@ Rectangle {
                         text: qsTr("Cancel")
                         height: 40
                         visible: NetworkManager.wifiConnecting
-                        onClicked: NetworkManager.cancelConnectionAttempt()
+                        onClicked: {
+                            NetworkManager.cancelConnectionAttempt()
+                            extrarect.wifiErrorDismissed = true
+                        }
+                    }
+                }
+                Quick1.Button {
+                    id: wifiStatus
+                    text: NetworkManager.managerAvailable && NetworkManager.wifiAvailable
+                          ? NetworkManager.wifiDeviceName + ": " + extrarect.stateLabel(NetworkManager.wifiState)
+                          : qsTr("Wi-Fi unavailable")
+                    width: parent.width
+                    height: 40
+                    style: ButtonStyle {
+                        label: Label {
+                            text: wifiStatus.text
+                            color: "black"
+                            width: wifiStatus.width - 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
+                        }
+                        background: Rectangle {
+                            color: extrarect.wifiStatusColor()
+                            border.width: control.activeFocus ? 2 : 1
+                            border.color: "#888"
+                        }
                     }
                 }
                 Label {
                     width: parent.width
                     height: 28
-                    text: !NetworkManager.managerAvailable ? qsTr("NetworkManager unavailable")
-                          : !NetworkManager.wifiAvailable ? qsTr("Wi-Fi unavailable")
-                          : !NetworkManager.wifiRadioEnabled ? qsTr("Wi-Fi radio disabled")
-                          : NetworkManager.wifiCurrentSsid.length
-                            ? NetworkManager.wifiState + " - " + NetworkManager.wifiCurrentSsid
-                            : NetworkManager.wifiState
+                    text: "IPv4: " + (extrarect.firstIpv4Address(NetworkManager.wifiIpv4Addresses) || "-")
                     elide: Text.ElideRight
                     wrapMode: Text.NoWrap
+                    clip: true
                 }
                 Label {
                     width: parent.width
                     height: 28
-                    text: extrarect.addressSummary(NetworkManager.wifiIpv4Addresses,
-                                                   NetworkManager.wifiIpv6Addresses)
+                    text: "IPv6: " + (extrarect.preferredIpv6Address(NetworkManager.wifiIpv6Addresses) || "-")
                     elide: Text.ElideRight
                     wrapMode: Text.NoWrap
+                    clip: true
                 }
                 Label {
                     width: parent.width
-                    height: 28
-                    text: NetworkManager.wifiError
+                    height: 52
+                    text: extrarect.wifiErrorMessage(NetworkManager.wifiError)
                     color: "darkred"
                     elide: Text.ElideRight
-                    wrapMode: Text.NoWrap
-                    visible: text.length > 0
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    clip: true
+                    visible: text.length > 0 && !extrarect.wifiErrorDismissed
                 }
             }
         }
@@ -168,9 +261,7 @@ Rectangle {
                 spacing: 8
                 Quick1.Button {
                     id: ethernetstatus
-                    text: NetworkManager.ethernetAvailable
-                          ? NetworkManager.ethernetDeviceName + ": " + NetworkManager.ethernetState
-                            : qsTr("Ethernet unavailable")
+                    text: extrarect.ethernetStatusText()
                     width: parent.width
                     height: 40
                     style: ButtonStyle {
@@ -194,10 +285,18 @@ Rectangle {
                 Label {
                     width: parent.width
                     height: 28
-                    text: extrarect.addressSummary(NetworkManager.ethernetIpv4Addresses,
-                                                   NetworkManager.ethernetIpv6Addresses)
+                    text: "IPv4: " + (extrarect.firstIpv4Address(NetworkManager.ethernetIpv4Addresses) || "-")
                     elide: Text.ElideRight
                     wrapMode: Text.NoWrap
+                    clip: true
+                }
+                Label {
+                    width: parent.width
+                    height: 28
+                    text: "IPv6: " + (extrarect.preferredIpv6Address(NetworkManager.ethernetIpv6Addresses) || "-")
+                    elide: Text.ElideRight
+                    wrapMode: Text.NoWrap
+                    clip: true
                 }
             }
         }

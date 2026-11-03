@@ -1,9 +1,9 @@
 # PowerTune Networking: Current State and Refactor Design
 
-This document records the PowerTune NetworkManager client implementation,
-available Device 0 evidence, and validation that remains outstanding. The
-client is implemented in source but has not yet been built or validated on
-Device 0.
+This document records the PowerTune NetworkManager client implementation and
+Device 0 validation. NetworkManager owns Wi-Fi profiles and IP configuration;
+the PowerTune Network page presents discovered state and bounded address
+summaries.
 
 ## Current implementation
 
@@ -11,7 +11,7 @@ Device 0.
 
 | Source | Current behavior | Classification |
 | --- | --- | --- |
-| `networkmanagerclient.cpp` / `networkmanagerclient.h` | Implements asynchronous system-D-Bus discovery, on-demand scans, SSID listing, saved/new profile activation, disconnection, radio/state/address reporting, and secret-free error messages. It filters by NetworkManager device type, excludes `p2p-dev-*`, and picks one deterministic device of each supported type. | New active NetworkManager client; target validation pending |
+| `networkmanagerclient.cpp` / `networkmanagerclient.h` | Implements asynchronous system-D-Bus discovery, on-demand scans, SSID listing, saved/new profile activation, disconnection, radio/state/address reporting, and secret-free error messages. It filters by NetworkManager device type, excludes `p2p-dev-*`, and picks one deterministic device of each supported type. | Active client; Device 0 scan, connection, and addressing validated |
 | `wifiscanner.cpp` / `wifiscanner.h` | Retains the old `iw wlan0` scanner, fixed `wlan0`/`eth0` status reads, and plaintext supplicant writer. It is no longer compiled or exposed to QML. | Dormant legacy source, excluded from the application |
 | `Settings/network.qml` | Explicit Scan button; SSID selection/hidden SSID entry; masked password field; connect, disconnect, cancel, status, error, and address display. It uses `NetworkManager` and does not scan during app startup. | Active settings UI wired to the new client |
 | `Settings/WifiCountryList.qml` | Supplies fixed country-code/name choices for the old supplicant writer. | No longer used by the active Network settings page |
@@ -66,31 +66,39 @@ normal completion mechanism.
 
 ### Device 0 connection and address status
 
-Device 0 validation confirms that PowerTune successfully creates and
-activates a NetworkManager Wi-Fi profile (`PowerTune MCPortAuthority`), that
-`wlan0` reaches connected state, and that the connection survives restarting
-`powertunedash.service`. Device 0 also confirms Ethernet can reach connected
-NetworkManager state with multiple IPv4 and IPv6 addresses. NetworkManager
-owns the Wi-Fi and Ethernet address configurations. No credential leakage was
-observed in PowerTune logs during Wi-Fi validation.
+Device 0 validation confirms that Wi-Fi scanning populates the AP selector,
+and PowerTune can create and activate a NetworkManager Wi-Fi profile
+(`PowerTune MCPortAuthority`). NetworkManager owns profile persistence; the
+Wi-Fi connection survives restarting `powertunedash.service`. Incorrect
+credentials produce a connection error, and no credential leakage was
+observed in PowerTune logs during validation.
+
+Both physical Device 0 Ethernet ports have been exercised. PowerTune follows
+the active Ethernet interface, and NetworkManager provides addresses for
+Wi-Fi and Ethernet. The final Network page presents each discovered interface
+with a human-readable state and consistent status colors: green for connected
+or activated, orange for connecting/configuring or carrier-only, and red for
+disconnected, unavailable, or failed. IPv4 and IPv6 summaries use separate
+bounded, elided rows. Wi-Fi authentication errors have a bounded, wrapped
+message with the actionable text “Wi-Fi authentication failed. Check the
+password.”
 
 The complete IPv4 and IPv6 address arrays remain exposed by the client for
-both Wi-Fi and Ethernet. The current Network settings screen is intentionally
-bounded: it displays the first address in NetworkManager's returned order
-for IPv4, and the first non-link-local IPv6 address (falling back to the first
-link-local address if no global address is present). This display-only choice
-does not filter or reorder the backend arrays. Labels are single-line and
-elided within fixed widths. Ethernet color follows NetworkManager state:
-activated is green, carrier without activation is orange, and missing,
-unavailable, or down is red.
+both Wi-Fi and Ethernet. The current Network settings screen displays the
+first address in NetworkManager's returned order for IPv4, and the first
+non-link-local IPv6 address (falling back to the first link-local address if
+no global address is present). This display-only choice does not filter or
+reorder the complete backend arrays. Each address is on its own single-line,
+bounded, elided row.
 
 The previous `AddressData` decoder attempted `beginArray()` on a non-const
 `QDBusArgument` copy, selecting QtDBus's write-side overload on a read-only
 received argument. The decoder now uses a const read-side argument for array
 and map extraction, while accepting native QVariant lists/maps. It keeps all
-non-empty addresses and removes duplicates. The correction and bounded UI
-summary have static-test coverage, but clean D-Bus decoding and the displayed
-addresses still require Device 0 retest.
+non-empty addresses and removes duplicates. The correction and bounded UI summary have source-level test coverage. Device 0
+has validated Wi-Fi and Ethernet address publication; the read-side decoder
+warning correction is present in source and still requires final-image
+validation.
 
 ### Network Settings page
 
@@ -138,21 +146,21 @@ profile may be activated without a newly entered password. Activation
 completion uses active connection states 2 (activated) and 4 (deactivated),
 with reason codes interpreted using `NMActiveConnectionStateReason`.
 
-The Device 0 evidence above validates scanning, connection persistence, and
-NetworkManager Wi-Fi/Ethernet connectivity. Clean D-Bus address decoding and
-the bounded address presentation still need to be verified on Device 0 after
-this correction. `wifiscanner.cpp` remains in the tree but is neither
-compiled nor exposed to QML.
+The Device 0 evidence above validates scanning, connection persistence,
+Wi-Fi/Ethernet addressing, and active Ethernet interface selection. Verify
+the QDBus read-only argument warning is absent on the final image.
+`wifiscanner.cpp` remains in the tree but is neither compiled nor exposed to
+QML.
 
 ## Device 0 and image integration evidence
 
 Device 0 validation reports NetworkManager 1.46.0 active, system D-Bus
 available, QtDBus 5.15.13 installed, Wi-Fi enabled, and successful
 NetworkManager D-Bus introspection. Observed devices include Wi-Fi `wlan0`,
-Wi-Fi P2P `p2p-dev-wlan0`, unavailable Ethernet `eth0`/`eth1`, GSM
-`cdc-wdm0`, and unmanaged CAN devices `canC`/`canE`. These are observations,
-not interface names PowerTune assumes. Fresh images intentionally contain no
-preconfigured Wi-Fi credentials. The latest
+Wi-Fi P2P `p2p-dev-wlan0`, Ethernet `eth0`/`eth1`, GSM `cdc-wdm0`, and
+unmanaged CAN devices `canC`/`canE`. Both Ethernet ports have been exercised;
+the names are observations, not interface names PowerTune assumes. Fresh
+images intentionally contain no preconfigured Wi-Fi credentials. The latest
 available `powertune-image` package manifest also includes:
 
 * NetworkManager 1.46, its daemon and Wi-Fi plugin;

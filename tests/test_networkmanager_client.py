@@ -146,17 +146,25 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
                                             if entry.get("address"))),
                          ["2001:db8::1", "2001:db8::2", "fe80::1"])
 
-    def test_address_summary_is_bounded_and_prefers_global_ipv6(self):
+    def test_address_rows_are_separate_bounded_and_prefer_global_ipv6(self):
         qml = (ROOT / "Settings/network.qml").read_text()
         self.assertIn("function firstIpv4Address(addresses)", qml)
         self.assertIn("return addresses.length ? addresses[0] : \"\"", qml)
         self.assertIn("function preferredIpv6Address(addresses)", qml)
         self.assertIn("!/^fe[89ab]/i.test(addresses[i])", qml)
         self.assertIn("return firstLinkLocal", qml)
-        self.assertIn("function addressSummary(ipv4, ipv6)", qml)
+        self.assertNotIn("function addressSummary(", qml)
+        self.assertEqual(qml.count('text: "IPv4: " +'), 2)
+        self.assertEqual(qml.count('text: "IPv6: " +'), 2)
+        self.assertEqual(qml.count("height: 28"), 4)
+        self.assertIn("NetworkManager.wifiIpv4Addresses", qml)
+        self.assertIn("NetworkManager.wifiIpv6Addresses", qml)
+        self.assertIn("NetworkManager.ethernetIpv4Addresses", qml)
+        self.assertIn("NetworkManager.ethernetIpv6Addresses", qml)
         self.assertIn("width: parent.width", qml)
         self.assertIn("elide: Text.ElideRight", qml)
         self.assertIn("wrapMode: Text.NoWrap", qml)
+        self.assertIn("clip: true", qml)
         self.assertNotIn("wifiIpv4Addresses.concat(NetworkManager.wifiIpv6Addresses).join", qml)
         self.assertNotIn("ethernetIpv4Addresses.concat(NetworkManager.ethernetIpv6Addresses).join", qml)
 
@@ -179,6 +187,81 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         qml = (ROOT / "Settings/network.qml").read_text()
         self.assertIn('NetworkManager.ethernetConnected ? "green"', qml)
         self.assertIn('NetworkManager.ethernetCarrier ? "orange" : "red"', qml)
+        self.assertIn("return NetworkManager.ethernetDeviceName + \": \" + state", qml)
+
+    def test_wifi_status_uses_discovered_interface_and_shared_color_rules(self):
+        qml = (ROOT / "Settings/network.qml").read_text()
+        wifi_color = qml[qml.index("function wifiStatusColor()"):
+                         qml.index("function wifiErrorMessage(")]
+        self.assertIn('NetworkManager.wifiState === "connected"', wifi_color)
+        self.assertIn('return "green"', wifi_color)
+        self.assertIn("NetworkManager.wifiConnecting", wifi_color)
+        self.assertIn('return "orange"', wifi_color)
+        self.assertIn('return "red"', wifi_color)
+        self.assertIn("NetworkManager.wifiDeviceName + \": \"", qml)
+        self.assertIn("extrarect.stateLabel(NetworkManager.wifiState)", qml)
+        self.assertIn("NetworkManager.ethernetConnected ? \"green\"", qml)
+        self.assertIn('NetworkManager.ethernetCarrier ? "orange" : "red"', qml)
+        self.assertIn("NetworkManager.ethernetConnected ? qsTr(\"Connected\")", qml)
+        self.assertIn("NetworkManager.ethernetCarrier ? qsTr(\"Link up\")", qml)
+
+        def wifi_color(state, connecting=False, available=True, radio=True, manager=True):
+            if not manager or not available or not radio:
+                return "red"
+            if state == "connected":
+                return "green"
+            if connecting or state in {
+                "preparing", "configuring", "waiting for credentials", "configuring IP",
+                "checking connection", "finishing connection",
+            }:
+                return "orange"
+            return "red"
+
+        self.assertEqual(wifi_color("connected"), "green")
+        self.assertEqual(wifi_color("configuring"), "orange")
+        self.assertEqual(wifi_color("disconnected", connecting=True), "orange")
+        self.assertEqual(wifi_color("disconnected"), "red")
+        self.assertEqual(wifi_color("connected", available=False), "red")
+
+        def ethernet_color(connected, carrier, available=True):
+            if connected:
+                return "green"
+            if available and carrier:
+                return "orange"
+            return "red"
+
+        self.assertEqual(ethernet_color(True, True), "green")
+        self.assertEqual(ethernet_color(False, True), "orange")
+        self.assertEqual(ethernet_color(False, False), "red")
+        self.assertEqual(ethernet_color(False, True, available=False), "red")
+
+    def test_wifi_errors_are_actionable_bounded_and_dismissed_on_new_actions(self):
+        qml = (ROOT / "Settings/network.qml").read_text()
+        errors = qml[qml.index("function wifiErrorMessage(error)"):
+                     qml.index("function ethernetStatusText()")]
+        self.assertIn("Wi-Fi authentication failed. Check the password.", errors)
+        self.assertIn("Wi-Fi connected, but IP configuration failed.", errors)
+        self.assertIn("NetworkManager could not connect to this Wi-Fi network.", errors)
+        self.assertIn("text: extrarect.wifiErrorMessage(NetworkManager.wifiError)", qml)
+        self.assertIn("height: 52", qml)
+        self.assertIn("width: parent.width", qml)
+        self.assertIn("wrapMode: Text.WordWrap", qml)
+        self.assertIn("maximumLineCount: 2", qml)
+        self.assertIn("clip: true", qml)
+        self.assertNotIn("return error", errors)
+        selector = qml[qml.index("onActivated: {"):
+                       qml.index("delegate: ItemDelegate")]
+        self.assertIn("extrarect.wifiErrorDismissed = true", selector)
+        connect = qml[qml.index("id: applyWifiSettings"):
+                      qml.index('text: "IPv4: "', qml.index("id: wifiStatus"))]
+        self.assertLess(connect.index("extrarect.wifiErrorDismissed = true"),
+                        connect.index("NetworkManager.connectToWifi"))
+        cancel = qml[qml.index('text: qsTr("Cancel")'):
+                     qml.index("Quick1.Button", qml.index('text: qsTr("Cancel")'))]
+        self.assertIn("NetworkManager.cancelConnectionAttempt()", cancel)
+        self.assertIn("extrarect.wifiErrorDismissed = true", cancel)
+        self.assertIn("onWifiStateChanged:", qml)
+        self.assertIn("extrarect.wifiErrorDismissed = false", qml)
 
     def test_scan_result_diagnostic_is_gated_to_explicit_scan(self):
         source = (ROOT / "networkmanagerclient.cpp").read_text()
@@ -349,7 +432,7 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn('title: qsTr("Wi-Fi")', qml)
         self.assertIn('title: qsTr("Ethernet")', qml)
         self.assertIn('title: qsTr("PowerTune")', qml)
-        self.assertIn("text: NetworkManager.wifiError", qml)
+        self.assertIn("text: extrarect.wifiErrorMessage(NetworkManager.wifiError)", qml)
         self.assertIn("NetworkManager.scanWifi()", qml)
         self.assertIn("width: parent.width", qml)
         self.assertGreaterEqual(qml.count("elide: Text.ElideRight"), 4)
