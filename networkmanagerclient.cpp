@@ -224,6 +224,13 @@ NetworkManagerClient::NetworkManagerClient(QObject *parent)
       m_wifiRadioEnabled(false),
       m_wifiScanning(false),
       m_wifiConnecting(false),
+      m_wifiAwaitingDeviceFailureReason(false),
+      m_wifiAddressRefreshGeneration(-1),
+      m_ethernetAddressRefreshGeneration(-1),
+      m_wifiIpv4RefreshComplete(false),
+      m_wifiIpv6RefreshComplete(false),
+      m_ethernetIpv4RefreshComplete(false),
+      m_ethernetIpv6RefreshComplete(false),
       m_capabilityDiagnosticsEmitted(false),
       m_refreshGeneration(0),
       m_connectionGeneration(0),
@@ -318,7 +325,10 @@ void NetworkManagerClient::initializeManager()
             return;
         }
         setManagerAvailable(true);
-        setWifiError(QString());
+        if (m_wifiError == QStringLiteral("System D-Bus is unavailable.") ||
+            m_wifiError == QStringLiteral("NetworkManager is unavailable.") ||
+            m_wifiError == QStringLiteral("Could not discover NetworkManager devices."))
+            setWifiError(QString());
         refreshDevices();
     });
 }
@@ -336,6 +346,7 @@ void NetworkManagerClient::clearDiscoveredState()
     const bool attemptWasActive = m_wifiConnecting;
     ++m_connectionGeneration;
     clearTransientCredentials();
+    m_wifiAwaitingDeviceFailureReason = false;
     m_wifiScanning = false;
     m_wifiConnecting = false;
     m_activeAttemptPath.clear();
@@ -525,6 +536,12 @@ void NetworkManagerClient::finishDeviceRefresh(int generation)
     if (generation != m_refreshGeneration)
         return;
     selectDevices();
+    m_wifiAddressRefreshGeneration = generation;
+    m_ethernetAddressRefreshGeneration = generation;
+    m_wifiIpv4RefreshComplete = false;
+    m_wifiIpv6RefreshComplete = false;
+    m_ethernetIpv4RefreshComplete = false;
+    m_ethernetIpv6RefreshComplete = false;
     updateSelectedDeviceDetails(m_devices.contains(m_wifiDevicePath) ? &m_devices[m_wifiDevicePath] : Q_NULLPTR, true);
     updateSelectedDeviceDetails(m_devices.contains(m_ethernetDevicePath) ? &m_devices[m_ethernetDevicePath] : Q_NULLPTR, false);
 
@@ -593,15 +610,23 @@ void NetworkManagerClient::updateSelectedDeviceDetails(Device *device, bool wifi
     if (wifi) {
         m_wifiState = device ? stateText(device->state) : QStringLiteral("unavailable");
         m_wifiCurrentSsid = device ? device->currentSsid : QString();
-        m_wifiIpv4 = device ? device->ipv4 : QStringList();
-        m_wifiIpv6 = device ? device->ipv6 : QStringList();
+        if (!device) {
+            m_wifiIpv4.clear();
+            m_wifiIpv6.clear();
+            m_wifiIpv4RefreshComplete = true;
+            m_wifiIpv6RefreshComplete = true;
+        }
     } else {
         m_ethernetState = device ? (device->carrier ? stateText(device->state) + QStringLiteral(" (link up)")
                                                        : stateText(device->state))
                                  : QStringLiteral("unavailable");
         m_ethernetConnectionName = device ? device->connectionName : QString();
-        m_ethernetIpv4 = device ? device->ipv4 : QStringList();
-        m_ethernetIpv6 = device ? device->ipv6 : QStringList();
+        if (!device) {
+            m_ethernetIpv4.clear();
+            m_ethernetIpv6.clear();
+            m_ethernetIpv4RefreshComplete = true;
+            m_ethernetIpv6RefreshComplete = true;
+        }
     }
 
     if (!device)
@@ -635,8 +660,28 @@ void NetworkManagerClient::updateSelectedDeviceDetails(Device *device, bool wifi
         addRelay(current.ip6ConfigPath, QString::fromLatin1(Ip6ConfigInterface));
         addRelay(current.activeConnectionPath, QString::fromLatin1(ActiveConnectionInterface),
                  QStringLiteral("StateChanged"));
-        loadIpConfiguration(current.ip4ConfigPath, false, generation, devicePath);
-        loadIpConfiguration(current.ip6ConfigPath, true, generation, devicePath);
+        if (current.ip4ConfigPath.isEmpty() || current.ip4ConfigPath == QStringLiteral("/")) {
+            current.ipv4.clear();
+            if (wifi)
+                m_wifiIpv4RefreshComplete = true;
+            else
+                m_ethernetIpv4RefreshComplete = true;
+        } else {
+            loadIpConfiguration(current.ip4ConfigPath, false, generation, devicePath);
+        }
+        if (current.ip6ConfigPath.isEmpty() || current.ip6ConfigPath == QStringLiteral("/")) {
+            current.ipv6.clear();
+            if (wifi)
+                m_wifiIpv6RefreshComplete = true;
+            else
+                m_ethernetIpv6RefreshComplete = true;
+        } else {
+            loadIpConfiguration(current.ip6ConfigPath, true, generation, devicePath);
+        }
+        if (wifi)
+            publishWifiAddressesIfComplete(generation);
+        else
+            publishEthernetAddressesIfComplete(generation);
         loadActiveConnection(current.activeConnectionPath, generation, devicePath);
         if (wifi && !current.activeAccessPointPath.isEmpty())
             loadAccessPoint(current.activeAccessPointPath, generation, current.activeAccessPointPath);
@@ -786,16 +831,41 @@ void NetworkManagerClient::loadIpConfiguration(const QString &path, bool ipv6, i
         else
             device.ipv4 = addresses;
         if (devicePath == m_wifiDevicePath) {
-            m_wifiIpv4 = device.ipv4;
-            m_wifiIpv6 = device.ipv6;
-            publishWifiStateIfChanged();
-        }
-        if (devicePath == m_ethernetDevicePath) {
-            m_ethernetIpv4 = device.ipv4;
-            m_ethernetIpv6 = device.ipv6;
-            publishEthernetStateIfChanged();
+            if (ipv6)
+                m_wifiIpv6RefreshComplete = true;
+            else
+                m_wifiIpv4RefreshComplete = true;
+            publishWifiAddressesIfComplete(generation);
+        } else if (devicePath == m_ethernetDevicePath) {
+            if (ipv6)
+                m_ethernetIpv6RefreshComplete = true;
+            else
+                m_ethernetIpv4RefreshComplete = true;
+            publishEthernetAddressesIfComplete(generation);
         }
     });
+}
+
+void NetworkManagerClient::publishWifiAddressesIfComplete(int generation)
+{
+    if (generation != m_wifiAddressRefreshGeneration ||
+        !m_wifiIpv4RefreshComplete || !m_wifiIpv6RefreshComplete)
+        return;
+    const Device device = m_devices.value(m_wifiDevicePath);
+    m_wifiIpv4 = device.ipv4;
+    m_wifiIpv6 = device.ipv6;
+    publishWifiStateIfChanged();
+}
+
+void NetworkManagerClient::publishEthernetAddressesIfComplete(int generation)
+{
+    if (generation != m_ethernetAddressRefreshGeneration ||
+        !m_ethernetIpv4RefreshComplete || !m_ethernetIpv6RefreshComplete)
+        return;
+    const Device device = m_devices.value(m_ethernetDevicePath);
+    m_ethernetIpv4 = device.ipv4;
+    m_ethernetIpv6 = device.ipv6;
+    publishEthernetStateIfChanged();
 }
 
 void NetworkManagerClient::loadActiveConnection(const QString &path, int generation,
@@ -961,6 +1031,7 @@ void NetworkManagerClient::connectToWifi(const QString &ssid, const QString &pas
 
     ++m_connectionGeneration;
     clearTransientCredentials();
+    m_wifiAwaitingDeviceFailureReason = false;
     m_pendingSsid = ssid;
     m_pendingPassword = keyManagement == QStringLiteral("none") ? QString() : password;
     m_pendingKeyManagement = keyManagement;
@@ -1205,6 +1276,8 @@ void NetworkManagerClient::handleActivationState(uint state, uint reason)
             error = QStringLiteral("Wi-Fi authentication failed. Check the password.");
         else if (reason == 5)
             error = QStringLiteral("The network did not provide a usable IP configuration.");
+        m_wifiAwaitingDeviceFailureReason =
+            error == QStringLiteral("NetworkManager could not connect to this Wi-Fi network.");
         finishConnectionAttempt(false, error);
     }
 }
@@ -1256,6 +1329,7 @@ void NetworkManagerClient::cancelConnectionAttempt()
     const QString activePath = m_activeAttemptPath;
     ++m_connectionGeneration;
     clearTransientCredentials();
+    m_wifiAwaitingDeviceFailureReason = false;
     m_wifiConnecting = false;
     m_activeAttemptPath.clear();
     deactivateConnection(activePath);
@@ -1318,6 +1392,8 @@ void NetworkManagerClient::finishConnectionAttempt(bool success, const QString &
     finalizeAttemptProfile(success);
     clearTransientCredentials();
     m_wifiConnecting = false;
+    if (success)
+        m_wifiAwaitingDeviceFailureReason = false;
     m_activeAttemptPath.clear();
     m_attemptProfilePath.clear();
     m_originalAttemptProfileSettings.clear();
@@ -1487,7 +1563,12 @@ void NetworkManagerClient::onDeviceStateChanged(uint state, uint oldState, uint 
             error = QStringLiteral("The network did not provide a usable IP configuration.");
         else if (reason == 53)
             error = QStringLiteral("The selected Wi-Fi network was not found. Check that it is in range.");
+        m_wifiAwaitingDeviceFailureReason = false;
         finishConnectionAttempt(false, error);
+    } else if (m_wifiAwaitingDeviceFailureReason && relay &&
+               relay->path() == m_wifiDevicePath && state == 120 && reason == 53) {
+        m_wifiAwaitingDeviceFailureReason = false;
+        setWifiError(QStringLiteral("The selected Wi-Fi network was not found. Check that it is in range."));
     }
     scheduleRefresh();
 }

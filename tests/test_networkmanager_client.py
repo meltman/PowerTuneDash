@@ -124,8 +124,8 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn('ipAddresses(properties.value(QStringLiteral("AddressData")))', loader)
         self.assertIn("device.ipv6 = addresses", loader)
         self.assertIn("device.ipv4 = addresses", loader)
-        self.assertIn("m_wifiIpv6 = device.ipv6", loader)
-        self.assertIn("m_wifiIpv4 = device.ipv4", loader)
+        self.assertIn("publishWifiAddressesIfComplete(generation)", loader)
+        self.assertIn("publishEthernetAddressesIfComplete(generation)", loader)
 
         address_data = [
             {"address": "172.25.1.22"},
@@ -262,7 +262,7 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
                      qml.index("Quick1.Button", qml.index('text: qsTr("Cancel")'))]
         self.assertIn("NetworkManager.cancelConnectionAttempt()", cancel)
         self.assertIn("extrarect.wifiErrorDismissed = true", cancel)
-        self.assertIn("onWifiStateChanged:", qml)
+        self.assertIn("function onWifiStateChanged()", qml)
         self.assertIn("extrarect.wifiErrorDismissed = false", qml)
 
     def test_scan_result_diagnostic_is_gated_to_explicit_scan(self):
@@ -493,8 +493,8 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn("point.ssid === ssid", selector)
         self.assertIn("NetworkManager.wifiCurrentSsid.length", selector)
         self.assertIn("connectedIndex >= 0 ? connectedIndex", selector)
-        self.assertIn("onAccessPointsChanged: networkSelector.restoreSelection()", qml)
-        self.assertIn("onWifiStateChanged:", qml)
+        self.assertIn("function onAccessPointsChanged()", qml)
+        self.assertIn("function onWifiStateChanged()", qml)
         self.assertNotIn("property int selectedIndex", selector)
         self.assertIn("property string selectedSsid", selector)
         restore = selector[selector.index("function restoreSelection()"):
@@ -582,6 +582,77 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
 
         for signal in ("wifiStateChanged", "ethernetStateChanged", "accessPointsChanged"):
             self.assertEqual(source.count(f"emit {signal}()"), 1)
+
+    def test_terminal_wifi_error_survives_refresh_and_late_device_reason(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        initialize = source[source.index("void NetworkManagerClient::initializeManager("):
+                            source.index("void NetworkManagerClient::setManagerAvailable(")]
+        refresh = source[source.index("void NetworkManagerClient::refreshDevices("):
+                         source.index("void NetworkManagerClient::loadDeviceProperties(")]
+        device_refresh = source[source.index("void NetworkManagerClient::finishDeviceRefresh("):
+                                source.index("void NetworkManagerClient::selectDevices(")]
+        activation = source[source.index("void NetworkManagerClient::handleActivationState("):
+                            source.index("void NetworkManagerClient::disconnectWifi(")]
+        device_failure = source[source.index("void NetworkManagerClient::onDeviceStateChanged("):
+                                source.index("void NetworkManagerClient::onActiveConnectionStateChanged(")]
+        finish = source[source.index("void NetworkManagerClient::finishConnectionAttempt("):
+                        source.index("void NetworkManagerClient::finalizeAttemptProfile(")]
+        connect = source[source.index("void NetworkManagerClient::connectToWifi("):
+                         source.index("void NetworkManagerClient::activateSavedConnection(")]
+
+        self.assertIn("m_wifiError == QStringLiteral(\"NetworkManager is unavailable.\")",
+                      initialize)
+        self.assertNotIn("m_wifiError == QStringLiteral(\"The selected Wi-Fi network was not found.",
+                         initialize)
+        self.assertIn("m_wifiAwaitingDeviceFailureReason =", activation)
+        self.assertIn("m_wifiAwaitingDeviceFailureReason && relay", device_failure)
+        self.assertIn("reason == 53", device_failure)
+        self.assertIn("setWifiError(QStringLiteral(\"The selected Wi-Fi network was not found.",
+                      device_failure)
+        self.assertNotIn("setWifiError(QString())", refresh)
+        self.assertNotIn("setWifiError(QString())", device_refresh)
+        self.assertIn("setWifiError(success ? QString() : error)", finish)
+        self.assertIn("m_wifiAwaitingDeviceFailureReason = false", connect)
+        self.assertIn("setWifiError(QString())", connect)
+        self.assertIn("if (success)\n        m_wifiAwaitingDeviceFailureReason = false", finish)
+
+    def test_address_rows_publish_only_after_complete_independent_snapshots(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        selected = source[source.index("void NetworkManagerClient::updateSelectedDeviceDetails("):
+                          source.index("void NetworkManagerClient::loadAccessPoints(")]
+        refresh = source[source.index("void NetworkManagerClient::finishDeviceRefresh("):
+                         source.index("void NetworkManagerClient::selectDevices(")]
+        wifi_publish = source[source.index("void NetworkManagerClient::publishWifiAddressesIfComplete("):
+                              source.index("void NetworkManagerClient::publishEthernetAddressesIfComplete(")]
+        ethernet_publish = source[source.index("void NetworkManagerClient::publishEthernetAddressesIfComplete("):
+                                  source.index("void NetworkManagerClient::loadActiveConnection(")]
+        self.assertNotIn("m_wifiIpv4 = device ?", selected)
+        self.assertNotIn("m_wifiIpv6 = device ?", selected)
+        self.assertNotIn("m_ethernetIpv4 = device ?", selected)
+        self.assertNotIn("m_ethernetIpv6 = device ?", selected)
+        self.assertIn("m_wifiIpv4RefreshComplete = false", refresh)
+        self.assertIn("m_wifiIpv6RefreshComplete = false", refresh)
+        self.assertIn("m_ethernetIpv4RefreshComplete = false", refresh)
+        self.assertIn("m_ethernetIpv6RefreshComplete = false", refresh)
+        self.assertIn("!m_wifiIpv4RefreshComplete || !m_wifiIpv6RefreshComplete", wifi_publish)
+        self.assertIn("m_wifiIpv4 = device.ipv4", wifi_publish)
+        self.assertIn("m_wifiIpv6 = device.ipv6", wifi_publish)
+        self.assertIn("publishWifiStateIfChanged()", wifi_publish)
+        self.assertIn("!m_ethernetIpv4RefreshComplete || !m_ethernetIpv6RefreshComplete",
+                      ethernet_publish)
+        self.assertIn("m_ethernetIpv4 = device.ipv4", ethernet_publish)
+        self.assertIn("m_ethernetIpv6 = device.ipv6", ethernet_publish)
+        self.assertIn("publishEthernetStateIfChanged()", ethernet_publish)
+        self.assertNotIn("m_wifiIpv4.clear()", source[
+            source.index("void NetworkManagerClient::refreshDevices("):
+            source.index("void NetworkManagerClient::loadDeviceProperties(")])
+
+    def test_active_network_connections_block_uses_function_handlers(self):
+        qml = (ROOT / "Settings/network.qml").read_text()
+        connections = qml[qml.index("Connections {"):qml.index("\n    Row {", qml.index("Connections {"))]
+        self.assertIn("function onAccessPointsChanged()", connections)
+        self.assertIn("function onWifiStateChanged()", connections)
+        self.assertNotRegex(connections, r"\bon[A-Z]\w*\s*:")
 
     def test_network_page_masks_password_and_avoids_legacy_reboot_flow(self):
         qml = (ROOT / "Settings/network.qml").read_text()

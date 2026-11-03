@@ -159,6 +159,8 @@ private:
                          const QString &currentAccessPointPath);
     void loadIpConfiguration(const QString &path, bool ipv6, int generation,
                              const QString &devicePath);
+    void publishWifiAddressesIfComplete(int generation);
+    void publishEthernetAddressesIfComplete(int generation);
     void loadActiveConnection(const QString &path, int generation,
                               const QString &devicePath);
     void addRelay(const QString &path, const QString &interface,
@@ -212,6 +214,13 @@ private:
     bool m_wifiRadioEnabled;
     bool m_wifiScanning;
     bool m_wifiConnecting;
+    bool m_wifiAwaitingDeviceFailureReason;
+    int m_wifiAddressRefreshGeneration;
+    int m_ethernetAddressRefreshGeneration;
+    bool m_wifiIpv4RefreshComplete;
+    bool m_wifiIpv6RefreshComplete;
+    bool m_ethernetIpv4RefreshComplete;
+    bool m_ethernetIpv6RefreshComplete;
     bool m_capabilityDiagnosticsEmitted;
     int m_refreshGeneration;
     int m_connectionGeneration;

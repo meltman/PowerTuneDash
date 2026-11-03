@@ -88,8 +88,10 @@ Rectangle {
 
     Connections {
         target: NetworkManager
-        onAccessPointsChanged: networkSelector.restoreSelection()
-        onWifiStateChanged: {
+        function onAccessPointsChanged() {
+            networkSelector.restoreSelection()
+        }
+        function onWifiStateChanged() {
             networkSelector.restoreSelection()
             if (NetworkManager.wifiError !== extrarect.observedWifiError) {
                 extrarect.observedWifiError = NetworkManager.wifiError

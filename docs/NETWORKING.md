@@ -76,15 +76,33 @@ address lists, from which the bounded QML address summaries are derived.
 Refreshes do not discard or truncate backend state, and subscriptions and
 event handling remain active.
 
+Address-row pulsing was traced to an incomplete refresh publication sequence:
+each refresh rebuilt the internal device records with empty address lists,
+published those temporary empty lists, then published IPv4 and IPv6 separately
+as their D-Bus replies arrived. Wi-Fi and Ethernet refresh together, explaining
+the synchronized clear/repopulate behavior. The client now retains the last
+published lists during refresh and publishes each interface's IPv4/IPv6 pair
+only after both families have completed; a changed complete snapshot emits
+once, while an identical snapshot emits nothing. Missing configuration objects
+are treated as completed empty families; failed D-Bus reads retain the last
+valid published addresses until a later successful refresh. This is a
+source-level diagnosis; final Device 0 confirmation remains part of retesting.
+
+The Network page's active `Connections` handlers use explicit `function
+on...()` syntax. Its address rows remain fixed-size and bound to the complete
+address properties; no timers, polling, or layout redesign were added.
+
 ### Device 0 connection and address status
 
 Device 0 validation confirms that Wi-Fi scanning populates the AP selector,
 and PowerTune can create and activate a NetworkManager Wi-Fi profile
 (`PowerTune MCPortAuthority`). NetworkManager owns profile persistence; the
 Wi-Fi connection survives restarting `powertunedash.service`. Incorrect
-credentials produce a connection error, and no credential leakage was
-observed in PowerTune logs during validation. Both physical Device 0 Ethernet
-ports have been exercised.
+credentials produce a terminal failure, and no credential leakage was
+observed in PowerTune logs during validation. Wi-Fi disconnect and
+passwordless saved-profile reconnect work; radio off/on and NetworkManager
+service restart recovery have also been validated. Both physical Device 0
+Ethernet ports have been exercised, with active-interface selection working.
 
 PowerTune follows the active Ethernet interface, and NetworkManager provides
 addresses for Wi-Fi and Ethernet. The final Network page presents each discovered interface
@@ -124,10 +142,16 @@ request, NetworkManager/supplicant performed its internal authentication
 attempts, and NetworkManager ultimately reported Device `StateChanged` state
 120 (`FAILED`) with reason 53 (`SSID_NOT_FOUND`), followed by an activation
 failure. The newly created failed profile was then deleted successfully and
-was absent from `nmcli connection show`. PowerTune now presents the distinct
-network-not-found/in-range message for this reason; the reason is not
-reclassified as authentication failure because an actually unavailable SSID
-must remain distinguishable.
+was absent from `nmcli connection show`. A terminal ActiveConnection failure
+can arrive before the more specific Device failure reason; previously the
+Device handler ignored that later signal after `wifiConnecting` had become
+false. It now publishes the late reason-53 message, “The selected Wi-Fi
+network was not found. Check that it is in range.” The error is not
+reclassified as authentication failure, and routine refreshes and a final
+disconnected state no longer clear it. A deliberate new attempt or successful
+connection clears the stored error; changing AP selection dismisses it in the
+UI, and cancellation retains its existing cancellation message. A successful
+NetworkManager restart clears only stored manager-availability errors.
 
 New profiles are created with autoconnect disabled while authentication is in
 progress. On success, PowerTune enables autoconnect and retains the persistent
