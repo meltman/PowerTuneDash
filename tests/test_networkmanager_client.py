@@ -41,6 +41,63 @@ class NetworkManagerClientSourceTests(unittest.TestCase):
         self.assertIn("NetworkManager could not connect", source)
         self.assertIn("authentication failed", source)
 
+    def test_wifi_scan_waits_for_wireless_properties_and_publishes_model(self):
+        source = (ROOT / "networkmanagerclient.cpp").read_text()
+        header = (ROOT / "networkmanagerclient.h").read_text()
+        scan = source[source.index("void NetworkManagerClient::scanWifi("):
+                      source.index("void NetworkManagerClient::connectToWifi(")]
+        self.assertIn('QStringLiteral("RequestScan")', scan)
+        self.assertIn("m_bus.asyncCall(message)", scan)
+        self.assertIn("NetworkManager accepted Wi-Fi scan request; awaiting wireless property updates", scan)
+        self.assertNotIn("scheduleRefresh()", scan)
+        self.assertNotIn("m_wifiScanning = false", scan[scan.index("} else {"):])
+
+        wireless_load = source[source.index("void NetworkManagerClient::loadDeviceTypeProperties("):
+                               source.index("void NetworkManagerClient::finishDeviceRefresh(")]
+        self.assertIn("QString::fromLatin1(WirelessInterface)", wireless_load)
+        self.assertIn("addRelay(path, interface)", wireless_load)
+        self.assertIn('QStringLiteral("LastScan")', wireless_load)
+        self.assertIn('QStringLiteral("AccessPoints")', wireless_load)
+        self.assertIn("objectPaths(properties.value(QStringLiteral(\"AccessPoints\")))", wireless_load)
+
+        relay = source[source.index("void NetworkManagerSignalRelay::propertiesChanged("):
+                       source.index("void NetworkManagerSignalRelay::notifyDeviceStateChanged(")]
+        self.assertIn("interface != m_interface", relay)
+        self.assertIn("changed.contains(QStringLiteral(\"LastScan\"))", relay)
+        self.assertIn("changed.contains(QStringLiteral(\"AccessPoints\"))", relay)
+        self.assertIn("invalidated.contains(QStringLiteral(\"LastScan\"))", relay)
+        self.assertIn("invalidated.contains(QStringLiteral(\"AccessPoints\"))", relay)
+        self.assertIn("emit this->changed()", relay)
+        refresh_chain = source[source.index("void NetworkManagerClient::onRelayChanged("):
+                               source.index("void NetworkManagerClient::onDeviceStateChanged(")]
+        self.assertIn("scheduleRefresh()", refresh_chain)
+        self.assertIn("device.lastScan > m_scanTimestampAtStart", source)
+        self.assertIn("m_scanTimeout->stop()", source)
+        self.assertIn("emit accessPointsChanged()", source)
+        self.assertIn('Q_PROPERTY(QVariantList accessPoints READ accessPoints NOTIFY accessPointsChanged)', header)
+
+        paths = source[source.index("QList<QDBusObjectPath> objectPaths("):
+                       source.index("QString stateText(")]
+        self.assertIn("qMetaTypeId<QDBusArgument>()", paths)
+        self.assertIn("argument.beginArray()", paths)
+        self.assertIn("argument >> path", paths)
+
+        model = source[source.index("void NetworkManagerClient::loadAccessPoints("):
+                       source.index("void NetworkManagerClient::loadAccessPoint(")]
+        self.assertIn("const QString key = hidden ? path : ssid", model)
+        self.assertIn("if (!unique->contains(key))", model)
+        for role in ("displayName", "ssid", "secure", "signalStrength", "supported"):
+            self.assertIn(f'QStringLiteral("{role}")', model)
+        self.assertIn("m_accessPoints = accessPoints", model)
+        self.assertIn('QStringLiteral("Wi-Fi scan completed: %1 unique access points")', model)
+        qml = (ROOT / "Settings/network.qml").read_text()
+        self.assertIn("model: NetworkManager.accessPoints", qml)
+        self.assertIn('textRole: "displayName"', qml)
+
+        for workaround in ("QThread::msleep", "waitForFinished", "QProcess", "nmcli", "iw "):
+            self.assertNotIn(workaround, source)
+        self.assertIn("m_scanTimeout->setSingleShot(true)", source)
+
     def test_access_point_security_cases(self):
         source = (ROOT / "networkmanagerclient.cpp").read_text()
         start = source.index("AccessPointSecurity classifyAccessPoint(")

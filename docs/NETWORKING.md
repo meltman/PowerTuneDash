@@ -31,6 +31,39 @@ no synchronous process wait. The dormant scanner source still contains legacy
 shell and interface-name assumptions but is no longer part of the qmake
 target. Qt Network continues to support unrelated HTTP features.
 
+### Wi-Fi scan and AP-model lifecycle
+
+Device 0 runtime validation confirmed that the Network page opens, Scan can
+be pressed, PowerTune does not spawn `iw`, `nmcli`, or `wpa_passphrase`, and
+NetworkManager immediately reports numerous WPA2/WPA3 access points through
+`nmcli` after the PowerTune scan. At that time the PowerTune dropdown remained
+empty. The request being accepted is not evidence that scan results are ready.
+
+The source trace found two gaps at the boundary between the accepted request
+and model population: a successful `RequestScan` reply caused an immediate
+refresh before NetworkManager's result properties necessarily changed, and
+the `AccessPoints` `ao` value was read only as a native
+`QList<QDBusObjectPath>`, without handling QtDBus's `QDBusArgument`
+representation. The latter can leave the enumerated path list empty and thus
+publish an empty model even though NetworkManager has access points.
+
+The corrected flow is event-driven: the wireless device subscribes to
+`org.freedesktop.DBus.Properties.PropertiesChanged` for
+`org.freedesktop.NetworkManager.Device.Wireless`. An accepted `RequestScan`
+leaves scanning active while awaiting `LastScan` or `AccessPoints` changes;
+those signals schedule the existing debounced device refresh. `AccessPoints`
+is decoded from either the native path list or a `QDBusArgument` array.
+`LastScan` advancement completes the scan after AP enumeration, and the
+resulting `QVariantList` of `QVariantMap` entries emits `accessPointsChanged`
+for the QML `ComboBox` (`textRole: "displayName"`). Visible SSIDs are
+deduplicated by SSID; hidden APs remain separate by object path. Debug
+diagnostics identify scan request, relevant wireless result updates, and
+unique result count, without logging credentials or every AP.
+
+This source correction has static-test coverage but has not yet been
+revalidated on Device 0. The bounded scan timeout remains a failure safeguard,
+not the normal completion mechanism.
+
 ### Network Settings page
 
 `Connect` creates the D-Bus client during application initialization. It

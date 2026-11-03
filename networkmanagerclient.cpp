@@ -43,6 +43,24 @@ QVariantMap unwrapMap(const QVariant &value)
     return result;
 }
 
+QList<QDBusObjectPath> objectPaths(const QVariant &value)
+{
+    const QVariant unwrapped = unwrapVariant(value);
+    if (unwrapped.userType() == qMetaTypeId<QDBusArgument>()) {
+        QDBusArgument argument = qvariant_cast<QDBusArgument>(unwrapped);
+        QList<QDBusObjectPath> paths;
+        argument.beginArray();
+        while (!argument.atEnd()) {
+            QDBusObjectPath path;
+            argument >> path;
+            paths.append(path);
+        }
+        argument.endArray();
+        return paths;
+    }
+    return unwrapped.value<QList<QDBusObjectPath> >();
+}
+
 QString stateText(uint state)
 {
     switch (state) {
@@ -144,10 +162,17 @@ void NetworkManagerSignalRelay::propertiesChanged(const QString &interface,
                                                    const QVariantMap &changed,
                                                    const QStringList &invalidated)
 {
-    Q_UNUSED(changed)
-    Q_UNUSED(invalidated)
-    if (interface == m_interface)
-        emit this->changed();
+    if (interface != m_interface)
+        return;
+    if (m_interface == QString::fromLatin1(WirelessInterface) &&
+        (changed.contains(QStringLiteral("LastScan")) ||
+         changed.contains(QStringLiteral("AccessPoints")) ||
+         invalidated.contains(QStringLiteral("LastScan")) ||
+         invalidated.contains(QStringLiteral("AccessPoints")))) {
+        qDebug().noquote() << QStringLiteral("Wi-Fi scan result update detected: device-path=\"%1\"")
+                              .arg(m_path);
+    }
+    emit this->changed();
 }
 
 void NetworkManagerSignalRelay::notifyDeviceStateChanged(uint state, uint oldState, uint reason)
@@ -437,7 +462,7 @@ void NetworkManagerClient::loadDeviceTypeProperties(const QString &path, uint ty
                 device.lastScan =
                     unwrapVariant(properties.value(QStringLiteral("LastScan"))).toLongLong();
                 const QList<QDBusObjectPath> accessPoints =
-                    unwrapVariant(properties.value(QStringLiteral("AccessPoints"))).value<QList<QDBusObjectPath> >();
+                    objectPaths(properties.value(QStringLiteral("AccessPoints")));
                 for (int i = 0; i < accessPoints.size(); ++i)
                     device.accessPointPaths.append(accessPoints.at(i).path());
                 addRelay(path, interface);
@@ -584,6 +609,7 @@ void NetworkManagerClient::loadAccessPoints(const Device &device, int generation
         if (m_wifiScanning && device.lastScan > m_scanTimestampAtStart) {
             m_wifiScanning = false;
             m_scanTimeout->stop();
+            qDebug() << "Wi-Fi scan completed: 0 unique access points";
             emit wifiStateChanged();
         }
         return;
@@ -649,6 +675,8 @@ void NetworkManagerClient::loadAccessPoints(const Device &device, int generation
                     if (m_wifiScanning && scanCompleted) {
                         m_wifiScanning = false;
                         m_scanTimeout->stop();
+                        qDebug().noquote() << QStringLiteral("Wi-Fi scan completed: %1 unique access points")
+                                              .arg(accessPoints.size());
                         emit wifiStateChanged();
                     }
                 }
@@ -836,6 +864,8 @@ void NetworkManagerClient::scanWifi()
     m_wifiScanning = true;
     emit wifiStateChanged();
     m_scanTimeout->start();
+    qDebug().noquote() << QStringLiteral("Wi-Fi scan requested: device=\"%1\"")
+                          .arg(wifiDeviceName());
     QDBusMessage message = QDBusMessage::createMethodCall(
         QString::fromLatin1(NetworkManagerService), m_wifiDevicePath,
         QString::fromLatin1(WirelessInterface), QStringLiteral("RequestScan"));
@@ -851,7 +881,7 @@ void NetworkManagerClient::scanWifi()
             setWifiError(QStringLiteral("NetworkManager could not scan for Wi-Fi networks."));
             emit wifiStateChanged();
         } else {
-            scheduleRefresh();
+            qDebug() << "NetworkManager accepted Wi-Fi scan request; awaiting wireless property updates";
         }
     });
 }
