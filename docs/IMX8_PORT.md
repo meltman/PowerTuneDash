@@ -152,6 +152,23 @@ status, address updates, and password persistence remain unverified. The
 [NETWORKING.md](NETWORKING.md) for implementation details and the Device 0
 test matrix.
 
+## CAN bench hardware
+
+On the validated Device 0 unit, onboard `canC` maps to `308c0000.can` and is
+physically populated. The SoC `canE` interface exists in Linux, but the
+optional slot-C physical CAN module is not installed on this unit. Software
+interface presence alone does not establish that a physical CAN transceiver
+is present.
+
+The external Waveshare USB-CAN-A is a separate bench CAN node, identified by
+USB VID:PID `1a86:7523` and the CH341 driver. Its tty number is dynamic; it
+must be discovered by USB identity and not assumed to be `/dev/ttyUSB0`.
+`tools/pt-usb-can.py` uses Waveshare's published serial-to-CAN protocol
+directly and does not change PowerTune CAN runtime behavior or configure
+Linux CAN interfaces. See [CAN_BENCH_TESTING.md](CAN_BENCH_TESTING.md) for
+protocol provenance, dependencies, the P8 pinout, termination arrangement,
+CLI, and the unrun Device 0 qualification steps.
+
 ## GPS and EC25 modem
 
 Validated target hardware includes a Quectel EC25. On Device 0, `/dev/ttyUSB1`

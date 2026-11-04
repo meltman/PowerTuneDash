@@ -87,6 +87,13 @@ unverified. Do not guess or present source inspection as runtime validation.
   compatibility, and stays open until application shutdown. Review
   `docs/DAEMON_UDP_PROTOCOL.md` before changing its record grammar, identifiers,
   binding, or lifecycle.
+* `tools/pt-usb-can.py` is a stand-alone Waveshare USB-CAN-A bench tool, not a
+  PowerTuneDash runtime integration. It discovers VID:PID `1a86:7523` rather
+  than assuming a tty number and uses Waveshare's published serial-CAN
+  protocol. Do not have this utility configure `canC`, `canE`, `can0`, or
+  PowerTune's CAN settings implicitly. Read `docs/CAN_BENCH_TESTING.md` before
+  bench use; its Device 0 hardware procedure is documented but has not yet
+  been run on the target.
 * Do not add, redistribute, execute, reverse engineer, modify, or depend upon
   PowerTuneDigital proprietary ECU daemon binaries in this fork. Independent
   integration publishers should target the documented PowerTune UDP
