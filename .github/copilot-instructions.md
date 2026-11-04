@@ -30,6 +30,12 @@ Before architectural or platform changes, read these in order:
   `docs/DASHBOARD_SCHEMA.md` in the same change set.
 * Keep changes small, scoped, and testable; do not casually change ECU/CAN,
   networking, or hardware behavior.
+* Do not add, redistribute, execute, reverse engineer, modify, or depend upon
+  PowerTuneDigital proprietary ECU daemon binaries in this fork. Independent
+  integration publishers should target the documented PowerTune UDP
+  interface on port 45454; use manufacturer specifications, legitimate
+  open-source work, or independent bus observations for ECU signal
+  definitions.
 * Separate validated facts from proposals, and do not invent validation
   evidence.
 * Update the relevant documentation in the same change set if architecture,

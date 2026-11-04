@@ -289,3 +289,46 @@ CAN-validated change.
 **What not to do:** Do not assume interface names, shell-parse `nmcli` output,
 persist credentials in PowerTune, or mix network configuration changes with
 CAN changes.
+
+## PT-013 — PowerTune integration publishers are independent from the visual runtime
+
+**Context:** The Dashboard receiver accepts normalized `identifier,value`
+datagrams and dispatches them to `DashBoard` properties. Previously, the
+receiver was started as a side effect of ECU Connect, alongside a SocketCAN
+attempt, even though receiving those records requires neither CAN nor an ECU
+daemon.
+
+**Decision:** On the i.MX8 appliance, start the UDP receiver once when the
+application-owned `Connect` object is constructed, before QML loads. Keep it
+available for the application lifetime regardless of Startup Daemon or ECU
+selection. Any independent publisher may supply normalized values by sending
+valid documented records to PowerTune port `45454`.
+
+```text
+integration publisher
+    -> UDP identifier,value
+    -> PowerTune :45454
+    -> DashBoard properties
+    -> QML/gauges
+```
+
+**Rationale:** The normalized-data interface is the boundary between an
+integration publisher and the visual runtime. Requiring a bundled daemon or
+Generic CAN selection would unnecessarily couple display data to ECU
+selection and hardware setup.
+
+**Validated evidence:** Device 0 previously received `179,2500` from
+`pt-udp-sim` and immediately updated the existing RPM gauge; an 800–8000
+bounce sweep also worked without an ECU daemon. The new application-start
+lifecycle is source- and static-test-validated but still requires focused
+Device 0 retesting.
+
+**Compatibility impact:** The record grammar, all 407 identifier cases,
+Dashboard mappings, and wildcard bind are unchanged. Existing publishers can
+continue sending the same records, and ECU Connect/Disconnect no longer
+controls receiver lifetime. The wildcard listener is reachable on all local
+network interfaces and provides no sender authentication or filtering.
+
+**What not to do:** Do not couple normalized-value reception back to ECU
+selection, CAN availability, or bundled publisher choice. Do not silently
+narrow the bind address without verifying publisher compatibility.

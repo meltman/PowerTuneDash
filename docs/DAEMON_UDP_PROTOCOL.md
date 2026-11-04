@@ -1,19 +1,19 @@
 # PowerTune daemon UDP identifier protocol
 
-This document describes the existing `udpreceiver` interface. It is not a producer specification: daemon ownership, ECU applicability, semantic units, and freshness guarantees are not declared by the receiver and are marked unknown where the source does not establish them.
+This document describes the UDP input interface implemented by the GPLv3-licensed PowerTuneDash source. It does not document or derive from the implementation of PowerTuneDigital's proprietary ECU daemon binaries.
+
+The identifier mappings below are derived from PowerTuneDash `udpreceiver` source and Device 0 behavioral validation. This is the PowerTune-side integration boundary for independent publishers: any publisher may supply normalized values by sending valid documented records, and it need not be a bundled ECU daemon. The receiver source does not establish ECU applicability, signal units, or freshness guarantees, so these remain unknown unless explicitly documented below.
 
 ## Transport and record format
 
 - **Transport:** UDP datagrams.
 - **PowerTune receive/destination port:** `45454` (`udpreceiver::startreceiver()` binds this port with `QUdpSocket::ShareAddress`).
 - **Address:** The receiver binds the port; the receiver source does not restrict sender address. Bench simulation below deliberately targets localhost.
-- **Payload:** text, normally ASCII for numeric records; no binary frame or length-delimited structure.
-- **Record:** `identifier,value` (comma-separated). Numeric identifier is converted with `QString::toInt()`; numeric value is converted with `QString::toFloat()` and passed as a `qreal` argument to a Dashboard setter. Text cases use the second split field directly.
+- **Payload encoding:** ASCII-compatible text for numeric records. The receiver constructs a `QString` from the datagram bytes; no encoding negotiation is defined. There is no binary frame or length-delimited structure.
+- **Record:** `identifier,value` (comma-separated), one record per datagram. Numeric identifiers use `QString::toInt()` and numeric values use `QString::toFloat()` before dispatch to a Dashboard setter. Conversion success is not checked: invalid or empty numeric fields convert to zero. Text cases use the second field directly.
 - **Framing:** one record per UDP datagram. No sequence number, checksum, unit field, timestamp, or validity marker is defined in this receiver.
 
 The current source has **407 distinct switch identifiers**: **378 active setter dispatches** and **29 cases with no active setter**. Of active dispatches, 351 consume the parsed numeric value (343 direct `Value` arguments and eight `Value/1000` arguments); 27 consume the second text field. All 407 cases are listed below. `Q_PROPERTY` names and comments are copied from source as labels, not asserted ECU signal definitions. Expected unit and daemon/ECU relevance remain unknown unless source explicitly shows a receiver-side behavior.
-
-Static, non-executing `strings` inspection found format markers in both `Hondatad` and `HondataS300` for 45 identifiers: 22, 49, 50, 84, 101, 106, 126, 128, 135, 137, 138, 142, 149, 155, 157, 179, 199, 210, 221, 228, 260, 261, 262, 263, 264, 265, 266, 267, 900, 901, 902, 903, 904, 905, 906, 907, 908, 909, 910, 911, 912, 913, 914, 915, 999. Each matching table row records the marker. String presence is evidence of a compiled format string only; it does not prove that the daemon emits the record at runtime.
 
 The source-label column preserves Dashboard property names or receiver comments; abbreviations are not expanded where the source does not define them.
 
@@ -44,7 +44,7 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 19 | `setbattlight` / `battlight` | `battlight` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 20 | `setboostcontrol` / `boostcontrol` | `boostcontrol` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 21 | `setBoostDuty` / `BoostDuty` | `BoostDuty` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 22 | `setBoostPres` / `BoostPres` | `BoostPres` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.039370079197446 (branch is setter-specific) | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
+| 22 | `setBoostPres` / `BoostPres` | `BoostPres` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.039370079197446 (branch is setter-specific) | Unknown (receiver does not identify publisher ownership) | |
 | 23 | `setBoosttp` / `Boosttp` | `Boosttp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 24 | `setBoostwg` / `Boostwg` | `Boostwg` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 25 | — | `brakepedalstate` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. Only a commented-out `setbrakepedalstate` call is present; it is not dispatched. |
@@ -71,8 +71,8 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 46 | `setEngLoad` / `EngLoad` | `EngLoad` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 47 | `setexcamangle1` / `excamangle1` | `excamangle1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 48 | `setexcamangle2` / `excamangle2` | `excamangle2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 49 | `setFlag1` / `Flag1` | `Flag1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 50 | `setFlag2` / `Flag2` | `Flag2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 49 | `setFlag1` / `Flag1` | `Flag1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 50 | `setFlag2` / `Flag2` | `Flag2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 51 | `setFlag3` / `Flag3` | `Flag3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 52 | `setFlag4` / `Flag4` | `Flag4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 53 | `setFlag5` / `Flag5` | `Flag5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -106,19 +106,19 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 81 | `setflatshiftstate` / `flatshiftstate` | `flatshiftstate` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 82 | `setFuelc` / `Fuelc` | `Fuelc` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 83 | `setfuelclevel` / `fuelclevel` | `fuelclevel` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 84 | `setfuelcomposition` / `fuelcomposition` | `fuelcomposition` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 84 | `setfuelcomposition` / `fuelcomposition` | `fuelcomposition` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 85 | `setfuelconsrate` / `fuelconsrate` | `fuelconsrate` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 86 | `setfuelcutperc` / `fuelcutperc` | `fuelcutperc` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 87 | `setfuelflow` / `fuelflow` | `fuelflow` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 88 | `setfuelflowdiff` / `fuelflowdiff` | `fuelflowdiff` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 89 | `setfuelflowret` / `fuelflowret` | `fuelflowret` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 100 | `setFuelPress` / `FuelPress` | `FuelPress` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 101 | `setFueltemp` / `Fueltemp` | `Fueltemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 101 | `setFueltemp` / `Fueltemp` | `Fueltemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Unknown (receiver does not identify publisher ownership) | |
 | 102 | `setfueltrimlongtbank1` / `fueltrimlongtbank1` | `fueltrimlongtbank1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 103 | `setfueltrimlongtbank2` / `fueltrimlongtbank2` | `fueltrimlongtbank2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 104 | `setfueltrimshorttbank1` / `fueltrimshorttbank1` | `fueltrimshorttbank1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 105 | `setfueltrimshorttbank2` / `fueltrimshorttbank2` | `fueltrimshorttbank2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 106 | `setGear` / `Gear` | `Gear` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 106 | `setGear` / `Gear` | `Gear` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 107 | `setgearswitch` / `gearswitch` | `gearswitch` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 108 | — | `gpsAltitude` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. Only a commented-out `setgpsAltitude` call is present; it is not dispatched. |
 | 109 | — | `GPS coordinates (commented-out)` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. Only a commented-out `setgpsLatitude` call is present; it is not dispatched. Contains commented-out fixed GPS coordinates; neither coordinate is dispatched. |
@@ -138,38 +138,38 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 123 | `setIgn2` / `Ign2` | `Ign2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 124 | `setIgn3` / `Ign3` | `Ign3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 125 | `setIgn4` / `Ign4` | `Ign4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 126 | `setincamangle1` / `incamangle1` | `incamangle1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 126 | `setincamangle1` / `incamangle1` | `incamangle1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 127 | `setincamangle2` / `incamangle2` | `incamangle2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 128 | `setInj` / `Inj` | `Inj` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%0.3f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.3f`; runtime emission unverified. |
+| 128 | `setInj` / `Inj` | `Inj` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 129 | `setInj1` / `Inj1` | `Inj1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 130 | `setInj2` / `Inj2` | `Inj2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 131 | `setInj3` / `Inj3` | `Inj3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 132 | `setInj4` / `Inj4` | `Inj4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 133 | `setInjDuty` / `InjDuty` | `InjDuty` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 134 | `setinjms` / `injms` | `injms` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 135 | `setIntaketemp` / `Intaketemp` | `Intaketemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 135 | `setIntaketemp` / `Intaketemp` | `Intaketemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Unknown (receiver does not identify publisher ownership) | |
 | 136 | `setIscvduty` / `Iscvduty` | `Iscvduty` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 137 | `setKnock` / `Knock` | `Knock` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 138 | `setknocklevlogged1` / `knocklevlogged1` | `knocklevlogged1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 137 | `setKnock` / `Knock` | `Knock` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 138 | `setknocklevlogged1` / `knocklevlogged1` | `knocklevlogged1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 139 | `setknocklevlogged2` / `knocklevlogged2` | `knocklevlogged2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 140 | `setknockretardbank1` / `knockretardbank1` | `knockretardbank1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 141 | `setknockretardbank2` / `knockretardbank2` | `knockretardbank2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 142 | `setLAMBDA` / `LAMBDA` | `LAMBDA` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard multiplies by configured lambda multiplier | Present as `%0.3f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.3f`; runtime emission unverified. |
+| 142 | `setLAMBDA` / `LAMBDA` | `LAMBDA` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard multiplies by configured lambda multiplier | Unknown (receiver does not identify publisher ownership) | |
 | 143 | `setlambda2` / `lambda2` | `lambda2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard multiplies by configured lambda multiplier | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 144 | `setlambda3` / `lambda3` | `lambda3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard multiplies by configured lambda multiplier | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 145 | `setlambda4` / `lambda4` | `lambda4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard multiplies by configured lambda multiplier | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 146 | `setLAMBDATarget` / `LAMBDATarget` | `LAMBDATarget` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 147 | `setlaunchcontolfuelenrich` / `launchcontolfuelenrich` | `launchcontolfuelenrich` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 148 | `setlaunchctrolignretard` / `launchctrolignretard` | `launchctrolignretard` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 149 | `setLeadingign` / `Leadingign` | `Leadingign` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 149 | `setLeadingign` / `Leadingign` | `Leadingign` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 150 | `setleftindicator` / `leftindicator` | `leftindicator` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 151 | `setlimpmode` / `limpmode` | `limpmode` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 152 | `setMAF1V` / `MAF1V` | `MAF1V` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 153 | `setMAF2V` / `MAF2V` | `MAF2V` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 154 | `setMAFactivity` / `MAFactivity` | `MAFactivity` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 155 | `setMAP` / `MAP` | `MAP` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Present as `%0.2f` format string in both Hondata binaries (static only) | Verified source mapping: 155 -> `setMAP` / `MAP`. Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
+| 155 | `setMAP` / `MAP` | `MAP` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify publisher ownership) | Verified source mapping: 155 -> `setMAP` / `MAP`. |
 | 156 | `setMAP2` / `MAP2` | `MAP2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 157 | `setmil` / `mil` | `mil` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 157 | `setmil` / `mil` | `mil` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 158 | `setmissccount` / `missccount` | `missccount` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 159 | `setMoilp` / `Moilp` | `Moilp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 160 | `setMVSS` / `MVSS` | `MVSS` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -191,7 +191,7 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 176 | `setrallyantilagswitch` / `rallyantilagswitch` | `rallyantilagswitch` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 177 | — | `RecvData` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. Only a commented-out `setRecvData` call is present; it is not dispatched. |
 | 178 | `setrightindicator` / `rightindicator` | `rightindicator` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 179 | `setrpm` / `rpm` | `rpm` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard can apply configured RPM smoothing; update is gated by DI1 RPM setting | Present as `%d` format string in both Hondata binaries (static only) | Verified source mapping: 179 -> `setrpm` / `rpm`. Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 179 | `setrpm` / `rpm` | `rpm` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard can apply configured RPM smoothing; update is gated by DI1 RPM setting | Unknown (receiver does not identify publisher ownership) | Verified source mapping: 179 -> `setrpm` / `rpm`. |
 | 180 | — | `RunStat` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. Only a commented-out `setRunStat` call is present; it is not dispatched. |
 | 181 | `setSecinjpulse` / `Secinjpulse` | `Secinjpulse` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 182 | `setsens1` / `sens1` | `sens1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -211,7 +211,7 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 196 | — | `NOS Pressure Sensor 2` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. |
 | 197 | — | `NOS Pressure Sensor 3` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. |
 | 198 | — | `NOS Pressure Sensor 4` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. |
-| 199 | `setSpeed` / `speed` | `speed` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value; Dashboard can apply configured speed smoothing | Present as `%d` format string in both Hondata binaries (static only) | Setter is called only when `ExternalSpeed() == 0`; otherwise this record does not update speed. Verified source mapping: 199 -> `setSpeed` / `speed`. Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 199 | `setSpeed` / `speed` | `speed` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value; Dashboard can apply configured speed smoothing | Unknown (receiver does not identify publisher ownership) | Setter is called only when `ExternalSpeed() == 0`; otherwise this record does not update speed. Verified source mapping: 199 -> `setSpeed` / `speed`. |
 | 200 | `setSVSS` / `SVSS` | `SVSS` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 201 | `settargetbstlelkpa` / `targetbstlelkpa` | `targetbstlelkpa` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 202 | `setThrottleV` / `ThrottleV` | `ThrottleV` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -222,7 +222,7 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 207 | `setTorque` / `Torque` | `Torque` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 208 | `settorqueredcutactive` / `torqueredcutactive` | `torqueredcutactive` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 209 | `settorqueredlevelactive` / `torqueredlevelactive` | `torqueredlevelactive` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 210 | `setTPS` / `TPS` | `TPS` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 210 | `setTPS` / `TPS` | `TPS` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 211 | `setTrailingign` / `Trailingign` | `Trailingign` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 212 | `settransientthroactive` / `transientthroactive` | `transientthroactive` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 213 | `settransoiltemp` / `transoiltemp` | `transoiltemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -233,25 +233,25 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 218 | `setturborpm` / `turborpm` | `turborpm` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 219 | `setecu` / `ecu` | `ecu` | Numeric (`int`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 220 | `setwastegatepress` / `wastegatepress` | `wastegatepress` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 221 | `setWatertemp` / `Watertemp` | `Watertemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Present as `%d` format string in both Hondata binaries (static only) | Dashboard property is `Watertemp`; simulator preset `coolant` targets this identifier. Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 221 | `setWatertemp` / `Watertemp` | `Watertemp` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard imperial-unit branch applies ×1.8 + 32 (some setters round) | Unknown (receiver does not identify publisher ownership) | Dashboard property is `Watertemp`; simulator preset `coolant` targets this identifier. |
 | 222 | `setwheeldiff` / `wheeldiff` | `wheeldiff` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 223 | `setwheelslip` / `wheelslip` | `wheelslip` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 224 | `setwheelspdftleft` / `wheelspdftleft` | `wheelspdftleft` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 225 | `setwheelspdftright` / `wheelspdftright` | `wheelspdftright` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 226 | `setwheelspdrearleft` / `wheelspdrearleft` | `wheelspdrearleft` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 227 | `setwheelspdrearright` / `wheelspdrearright` | `wheelspdrearright` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard speed-unit/calibration settings convert or scale the value | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 228 | `setBatteryV` / `BatteryV` | `BatteryV` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%f`; runtime emission unverified. |
+| 228 | `setBatteryV` / `BatteryV` | `BatteryV` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 | 229 | `setIntakepress` / `Intakepress` | `Intakepress` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 255 | — | `CAS REF` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. |
 | 259 | — | `AAC Valve` | No active dispatch | Unknown | None; case has no active setter | Unknown | Common parsing happens before the switch, but this case does not update a Dashboard property. |
-| 260 | `setAnalog0` / `Analog0` | `Analog0` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 261 | `setAnalog1` / `Analog1` | `Analog1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 262 | `setAnalog2` / `Analog2` | `Analog2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 263 | `setAnalog3` / `Analog3` | `Analog3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 264 | `setAnalog4` / `Analog4` | `Analog4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 265 | `setAnalog5` / `Analog5` | `Analog5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 266 | `setAnalog6` / `Analog6` | `Analog6` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
-| 267 | `setAnalog7` / `Analog7` | `Analog7` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Present as `%0.2f` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%0.2f`; runtime emission unverified. |
+| 260 | `setAnalog0` / `Analog0` | `Analog0` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 261 | `setAnalog1` / `Analog1` | `Analog1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 262 | `setAnalog2` / `Analog2` | `Analog2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 263 | `setAnalog3` / `Analog3` | `Analog3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 264 | `setAnalog4` / `Analog4` | `Analog4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 265 | `setAnalog5` / `Analog5` | `Analog5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 266 | `setAnalog6` / `Analog6` | `Analog6` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
+| 267 | `setAnalog7` / `Analog7` | `Analog7` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify publisher ownership) | |
 | 268 | `setAnalog8` / `Analog8` | `Analog8` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 269 | `setAnalog9` / `Analog9` | `Analog9` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 270 | `setAnalog10` / `Analog10` | `Analog10` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | setter stores input and may update a derived Dashboard value | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -374,22 +374,22 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 871 | `setTirepresRR` / `TirepresRR` | `TirepresRR` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 872 | `setengineprotectionreason` / `engineprotectionreason` | `engineprotectionreason` | Text (`QString`) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | Text dispatch uses only the first comma-separated value field. |
 | 873 | `setFuelPress2` / `FuelPress2` | `FuelPress2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | Dashboard unit branch applies factor 0.145038 (branch is setter-specific) | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 900 | `setEXDigitalInput1` / `EXDigitalInput1` | `EXDigitalInput1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 901 | `setEXDigitalInput2` / `EXDigitalInput2` | `EXDigitalInput2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 902 | `setEXDigitalInput3` / `EXDigitalInput3` | `EXDigitalInput3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 903 | `setEXDigitalInput4` / `EXDigitalInput4` | `EXDigitalInput4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 904 | `setEXDigitalInput5` / `EXDigitalInput5` | `EXDigitalInput5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 905 | `setEXDigitalInput6` / `EXDigitalInput6` | `EXDigitalInput6` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 906 | `setEXDigitalInput7` / `EXDigitalInput7` | `EXDigitalInput7` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 907 | `setEXDigitalInput8` / `EXDigitalInput8` | `EXDigitalInput8` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 908 | `setEXAnalogInput0` / `EXAnalogInput0` | `EXAnalogInput0` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 909 | `setEXAnalogInput1` / `EXAnalogInput1` | `EXAnalogInput1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 910 | `setEXAnalogInput2` / `EXAnalogInput2` | `EXAnalogInput2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 911 | `setEXAnalogInput3` / `EXAnalogInput3` | `EXAnalogInput3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 912 | `setEXAnalogInput4` / `EXAnalogInput4` | `EXAnalogInput4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 913 | `setEXAnalogInput5` / `EXAnalogInput5` | `EXAnalogInput5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 914 | `setEXAnalogInput6` / `EXAnalogInput6` | `EXAnalogInput6` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
-| 915 | `setEXAnalogInput7` / `EXAnalogInput7` | `EXAnalogInput7` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 900 | `setEXDigitalInput1` / `EXDigitalInput1` | `EXDigitalInput1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 901 | `setEXDigitalInput2` / `EXDigitalInput2` | `EXDigitalInput2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 902 | `setEXDigitalInput3` / `EXDigitalInput3` | `EXDigitalInput3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 903 | `setEXDigitalInput4` / `EXDigitalInput4` | `EXDigitalInput4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 904 | `setEXDigitalInput5` / `EXDigitalInput5` | `EXDigitalInput5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 905 | `setEXDigitalInput6` / `EXDigitalInput6` | `EXDigitalInput6` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 906 | `setEXDigitalInput7` / `EXDigitalInput7` | `EXDigitalInput7` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 907 | `setEXDigitalInput8` / `EXDigitalInput8` | `EXDigitalInput8` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
+| 908 | `setEXAnalogInput0` / `EXAnalogInput0` | `EXAnalogInput0` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 909 | `setEXAnalogInput1` / `EXAnalogInput1` | `EXAnalogInput1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 910 | `setEXAnalogInput2` / `EXAnalogInput2` | `EXAnalogInput2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 911 | `setEXAnalogInput3` / `EXAnalogInput3` | `EXAnalogInput3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 912 | `setEXAnalogInput4` / `EXAnalogInput4` | `EXAnalogInput4` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 913 | `setEXAnalogInput5` / `EXAnalogInput5` | `EXAnalogInput5` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 914 | `setEXAnalogInput6` / `EXAnalogInput6` | `EXAnalogInput6` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
+| 915 | `setEXAnalogInput7` / `EXAnalogInput7` | `EXAnalogInput7` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | receiver divides the parsed value by 1,000 | Unknown (receiver does not identify publisher ownership) | |
 | 916 | `setAFRcyl1` / `AFRcyl1` | `AFRcyl1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 917 | `setAFRcyl2` / `AFRcyl2` | `AFRcyl2` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 918 | `setAFRcyl3` / `AFRcyl3` | `AFRcyl3` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
@@ -429,7 +429,7 @@ Verified examples: `179` calls `setrpm` (Dashboard property `rpm`); `155` calls 
 | 952 | `setRotaryTrimpot3` / `RotaryTrimpot3` | `RotaryTrimpot3` | Numeric (`int`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 953 | `setCalibrationSelect` / `CalibrationSelect` | `CalibrationSelect` | Numeric (`int`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
 | 954 | `setCruisecontrol` / `Cruisecontrol` | `Cruisecontrol` | Numeric (`int`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify daemon/ECU ownership) | — |
-| 999 | `setfrequencyDIEX1` / `frequencyDIEX1` | `frequencyDIEX1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Present as `%d` format string in both Hondata binaries (static only) | Static format marker in both binaries: `%d`; runtime emission unverified. |
+| 999 | `setfrequencyDIEX1` / `frequencyDIEX1` | `frequencyDIEX1` | Numeric (`qreal`; receiver parses float) | Unknown (not specified by receiver interface) | No receiver scaling; no input scaling identified in setter | Unknown (receiver does not identify publisher ownership) | |
 
 ## Malformed and repeated input behavior
 
@@ -446,7 +446,7 @@ The receiver performs parsing before checking whether an identifier has an activ
 
 ## Standalone localhost simulator
 
-`tools/powertune-udp-sim.py` is a development utility. It does not start an ECU daemon or configure CAN, license data, or privileged resources. It emits no traffic until explicitly invoked and always sends to `127.0.0.1:45454`. The minimum interval is 10 ms (100 datagrams/second maximum); Ctrl-C stops a continuous bounce sweep.
+`tools/powertune-udp-sim.py` is a development utility. It does not start an ECU daemon, configure CAN, or require privileged resources. It emits no traffic until explicitly invoked and always sends to `127.0.0.1:45454`. The minimum interval is 10 ms (100 datagrams/second maximum); Ctrl-C stops a continuous bounce sweep.
 
 One-shot injection:
 
@@ -490,9 +490,128 @@ Run it explicitly with:
 python3 tools/powertune-udp-sim.py --scenario bench.json
 ```
 
+## Integration boundary and receiver lifecycle
+
+The PowerTune visual runtime consumes normalized values; it does not require
+a particular ECU daemon. The boundary is:
+
+```text
+independent integration publisher
+    -> UDP identifier,value
+    -> PowerTune UDP receiver on :45454
+    -> DashBoard property/setter
+    -> QML gauge or display
+```
+
+An independent publisher may implement this documented interface without
+being one of the bundled executables. It needs no ECU selection, legacy
+daemon, CAN setup, or publisher-specific configuration in PowerTune. For
+example, `179,2500` dispatches identifier 179 to `setrpm`, updating
+`Dashboard.rpm` to 2500; the existing RPM gauge displays that value.
+
+### Legacy behavior
+
+Previously, `Connect` constructed the receiver without binding it.
+`Connect::openConnection()` started the receiver only after an ECU Connect
+action, for selector indices 0–4. That path also attempted `can0` through
+`m_extender->openCAN(...)`. The receiver could consequently be unavailable
+when no ECU was selected/connected, even though UDP parsing itself had no CAN
+or daemon dependency. Startup Daemon selection was a separate path and did
+not itself open the receiver. Disconnect closed the receiver for some ECU
+selections but omitted the close for selector 1, producing inconsistent
+ownership.
+
+### i.MX8 appliance behavior
+
+The application constructs `Connect` from `main.cpp` before loading the QML
+root. `Connect` now starts its owned UDP receiver immediately after
+construction. The receiver binds once for the lifetime of the application:
+Startup Daemon may remain `None`, and the user does not need to select Generic
+CAN, press ECU Connect, or have `can0` present to receive normalized UDP
+records. Normal ECU Connect/Disconnect actions no longer start, close, or
+rebind the receiver. The ECU-specific serial/CAN behavior remains separate;
+for example, the PowerFC serial connection still opens and closes as before.
+Destroying the application-owned receiver at process shutdown releases the
+socket.
+
+The bind remains `bind(45454, QUdpSocket::ShareAddress)` with no explicit
+address, preserving existing publisher compatibility. The resulting listener
+is wildcard (on Linux IPv4, `0.0.0.0`), not localhost-only. The receiver does
+not authenticate senders, restrict source addresses, or validate record
+freshness. Thus any host able to reach the device's network interfaces can
+send records to the Dashboard. Do not treat the localhost-only simulator
+destination as evidence that all supported publishers use loopback.
+
+On successful bind, the receiver emits one INFO diagnostic containing the
+bound address and port. On failure it emits one ERROR diagnostic with the
+socket error (limited to 256 characters) and does not retry automatically.
+Normal ECU connection actions cannot cause repeated bind attempts.
+
+### Device 0 evidence and canonical bench utility
+
+Device 0 validated the PowerTune-side data path with Startup Daemon set to
+None, Generic CAN selected, and the normal Connect action: `pt-udp-sim`
+sent `179,2500` and the existing RPM gauge immediately displayed the
+injected value. A continuous sweep also drove the gauge upward and downward
+between 800 and 8000. This validates the receiver/parser/dashboard boundary
+without requiring a legacy ECU daemon. The new application-start lifecycle
+and diagnostics still require a focused Device 0 retest after installing the
+changed application.
+
+`pt-udp-sim` is the canonical development utility. Its default target is
+`127.0.0.1:45454`; it emits nothing unless invoked. Examples:
+
+```sh
+pt-udp-sim --signal rpm --value 2500
+
+pt-udp-sim \
+  --signal rpm \
+  --min 800 \
+  --max 8000 \
+  --step 200 \
+  --interval-ms 100 \
+  --bounce
+```
+
+Source-checkout alternative:
+
+```sh
+python3 tools/powertune-udp-sim.py --signal rpm --value 2500
+```
+
+The simulator caps continuous sending at 100 datagrams/second. For other
+publishers, no required update frequency is defined by the PowerTune receiver;
+send current values as needed and avoid unbounded bursts. The receiver drains
+pending datagrams in order but provides no queue limit, rate limiter, sequence
+checking, or stale-value timeout.
+
+### Focused Device 0 retest
+
+1. Leave Startup Daemon at `None`, do not press ECU Connect, and start the
+   updated PowerTuneDash.
+2. Confirm a single startup message reports the UDP receiver listening on
+   port 45454; inspect `ss -lunp | grep ':45454'` or `/proc/net/udp` to confirm
+   the wildcard bind.
+3. Run `pt-udp-sim --signal rpm --value 2500`; verify the existing RPM gauge
+   updates immediately. Run the bounce example above and verify both
+   endpoints and the return sweep.
+4. Repeat while ECU Connect is inactive and with Startup Daemon still None.
+   Verify there is no need to select Generic CAN or create `can0`.
+5. Connect and disconnect the available ECU selections; verify UDP 45454
+   remains bound and no additional listening diagnostic appears. For selector
+   1, separately verify its existing Apexi serial open/close behavior.
+6. To test failure handling safely, occupy UDP 45454 with a temporary local
+   listener before starting the application. Confirm one bounded ERROR
+   diagnostic, no retry loop, and no false listening-success message. Stop
+   the temporary listener and restart the application to verify recovery.
+7. Exit PowerTuneDash and confirm the application-owned socket is released.
+
 ## Source references
 
 - `udpreceiver.cpp`: UDP bind, record parsing, and identifier switch.
+- `connect.cpp`: application startup and ECU connection/disconnection lifecycle.
+- `main.cpp`: construction of the QML-facing `Connect` object before QML load.
+- `Settings/startup.qml`: separate Startup Daemon Apply path.
 - `dashboard.h`: Dashboard property names/types.
 - `dashboard.cpp`: setter-level unit conversion, scaling, and derived-value behavior.
 - `tools/powertune-udp-sim.py`: local bench publisher.

@@ -143,9 +143,11 @@ class UdpSimulatorTests(unittest.TestCase):
         self.assertEqual(documented_ids, cases)
         active_rows = re.findall(r"^\|\s*\d+\s*\|\s*`set\w+`", table, re.MULTILINE)
         self.assertEqual(len(active_rows), 378)
-        self.assertEqual(
-            table.count("Static format marker in both binaries:"), 45
-        )
+        self.assertNotIn("format marker in a bundled binary", table)
+        self.assertNotIn("Hondata", table)
+
+    def test_device_validated_rpm_example_serializes_unchanged(self):
+        self.assertEqual(SIM.serialize_record(179, "2500"), b"179,2500")
 
 
 if __name__ == "__main__":

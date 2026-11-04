@@ -18,10 +18,10 @@ private:
      DashBoard *m_dashboard;
      QUdpSocket *udpSocket = nullptr;
      int         m_units;
+     bool        m_startAttempted = false;
 public slots:
      void processPendingDatagrams();
      void startreceiver();
-     void closeConnection();
 signals:
 
 

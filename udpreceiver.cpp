@@ -1,8 +1,8 @@
 #include "udpreceiver.h"
 #include "dashboard.h"
 #include <QUdpSocket>
-#include <QHostAddress>
 #include <QDataStream>
+#include <QDebug>
 
 
 udpreceiver::udpreceiver(QObject *parent)
@@ -22,27 +22,30 @@ udpreceiver::udpreceiver(DashBoard *dashboard, QObject *parent)
 
 void udpreceiver::startreceiver()
 {
-    if (udpSocket)
+    if (m_startAttempted)
+        return;
+
+    m_startAttempted = true;
+    udpSocket = new QUdpSocket(this);
+    if (!udpSocket->bind(45454, QUdpSocket::ShareAddress))
     {
-        udpSocket->close();
+        const QString error = udpSocket->errorString()
+                                  .left(256)
+                                  .replace(QLatin1Char('\n'), QLatin1Char(' '))
+                                  .replace(QLatin1Char('\r'), QLatin1Char(' '));
+        qCritical().noquote()
+            << QStringLiteral("ERROR PowerTune integration receiver failed to bind UDP port 45454: %1")
+                   .arg(error);
         delete udpSocket;
         udpSocket = nullptr;
+        return;
     }
-    udpSocket = new QUdpSocket(this);
-    udpSocket->bind(45454, QUdpSocket::ShareAddress);
+
     connect(udpSocket, SIGNAL(readyRead()),
             this, SLOT(processPendingDatagrams()));
-
-}
-
-void udpreceiver::closeConnection()
-{
-    if (udpSocket)
-    {
-        udpSocket->close();
-        delete udpSocket;
-        udpSocket = nullptr;
-    }
+    qInfo().noquote()
+        << QStringLiteral("INFO PowerTune integration receiver listening: address=\"%1\", port=45454")
+               .arg(udpSocket->localAddress().toString());
 }
 void udpreceiver::processPendingDatagrams()
 {
@@ -1006,7 +1009,7 @@ void udpreceiver::processPendingDatagrams()
             break;
         case 826:
             m_dashboard->setautogear(list[1]);
-            break;       
+            break;
         case 827:
             m_dashboard->setoilpressurelamp(Value);
             break;

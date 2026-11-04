@@ -157,6 +157,7 @@ Connect::Connect(QObject *parent) :
     m_gps = new GPS(m_dashBoard, this);
     m_adaptronicselect= new AdaptronicSelect(m_dashBoard, this);
     m_udpreceiver= new udpreceiver(m_dashBoard, this);
+    m_udpreceiver->startreceiver();
     m_apexi= new Apexi(m_dashBoard, this);
     m_sensors = new Sensors(m_dashBoard, this);
     m_datalogger = new datalogger(m_dashBoard, this);
@@ -1301,39 +1302,11 @@ void Connect::openConnection(const QString &portName, const int &ecuSelect,const
     selectedPort = portName;
     canbaseadress = canbase;
     rpmcanbaseadress = rpmcanbase;
-//model: [ "CAN","PowerFC","Consult","OBD2"]
-//model: [ "CAN","PowerFC","Consult","OBD2"]
-    //UDP receiver
-
     m_extender->openCAN(canbaseadress,rpmcanbaseadress);
 
-
-    if (ecuSelect == 0)
-    {
-        m_udpreceiver->startreceiver();
-    }
-    //Apexi
     if (ecuSelect == 1)
     {
-        m_udpreceiver->startreceiver();
         m_apexi->openConnection(portName);
-    }
-
-    if (ecuSelect == 2)
-    {
-        //NissanConsult
-
-        m_udpreceiver->startreceiver();
-    }
-    if (ecuSelect == 3)
-    {
-        //OBD2
-        m_udpreceiver->startreceiver();
-    }
-    if (ecuSelect == 4)
-    {
-        //OBD2
-        m_udpreceiver->startreceiver();
     }
     /*
     if (ecuSelect == 5)
@@ -1341,7 +1314,6 @@ void Connect::openConnection(const QString &portName, const int &ecuSelect,const
         //HaltechV1
         QProcess *process = new QProcess(this);
         process->start(ptBasePath() + "/Haltech/HaltechV1");
-        m_udpreceiver->startreceiver();
     }
     if (ecuSelect == 6)
     {
@@ -1368,12 +1340,10 @@ void Connect::openConnection(const QString &portName, const int &ecuSelect,const
 
         QProcess *process = new QProcess(this);
         process->start(ptBasePath() + "/Haltech/HaltechV2");
-        m_udpreceiver->startreceiver();
     }
 
     if (ecuSelect == 7)
     {
-        m_udpreceiver->startreceiver();
     }
      //Dicktator
     if (ecuSelect == 9)
@@ -1402,25 +1372,9 @@ void Connect::closeConnection()
 {
     //qDebug() << "Closing"<<ecu;
      m_calculations->stop();
-    switch (ecu)
+    if (ecu == 1)
     {
-
-    case 0:
-        m_udpreceiver->closeConnection();
-        break;
-    case 1: //Apexi
         m_apexi->closeConnection();
-        break;
-    case 2:
-        //qDebug() << "Clsoing now";
-        m_udpreceiver->closeConnection();
-        break;
-    case 3:
-        m_udpreceiver->closeConnection();
-        break;
-    default:
-        m_udpreceiver->closeConnection();
-        break;
     }
 //model: [ "CAN","PowerFC","Consult","OBD2"]
     m_calculations->stop();

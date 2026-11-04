@@ -30,6 +30,11 @@ The validated Device 0 baseline is:
 * Weston, Docker, and containerd automatic startup are disabled.
 * U-Boot environment can be read and written from Linux.
 * Command-line eMMC/U-Boot recovery tools remain available.
+* Device 0 validated the PowerTune UDP data path: `pt-udp-sim` sent
+  `179,2500` and the existing RPM gauge updated; an 800–8000 bounce sweep
+  also worked without launching a legacy ECU daemon. The receiver is now
+  started with the application, but that changed startup lifecycle still
+  needs focused Device 0 retesting.
 
 Treat these as target-validated observations, not guarantees about other
 boards or future images. If new evidence conflicts, investigate and update the
@@ -76,6 +81,18 @@ unverified. Do not guess or present source inspection as runtime validation.
   treat source implementation as target validation.
 * Do not add an audio server to satisfy PowerTune warning sounds; use the
   documented target ALSA backend and runtime capability check.
+* The PowerTune UDP integration boundary is independent of ECU selection and
+  daemon choice. `udpreceiver` binds port 45454 when the application-owned
+  `Connect` object is constructed, retains its wildcard binding for
+  compatibility, and stays open until application shutdown. Review
+  `docs/DAEMON_UDP_PROTOCOL.md` before changing its record grammar, identifiers,
+  binding, or lifecycle.
+* Do not add, redistribute, execute, reverse engineer, modify, or depend upon
+  PowerTuneDigital proprietary ECU daemon binaries in this fork. Independent
+  integration publishers should target the documented PowerTune UDP
+  interface. Derive ECU signal definitions only from manufacturer-published
+  specifications, legitimately available open-source work, or independently
+  obtained bus observations. See `docs/LICENSING_AND_PROVENANCE.md`.
 * PowerTuneDash changes must be committed before BitBake consumes them.
 * Do not blindly stage unrelated `meta-powertune` BSP/Falcon work.
 
