@@ -154,20 +154,26 @@ test matrix.
 
 ## CAN bench hardware
 
-On the validated Device 0 unit, onboard `canC` maps to `308c0000.can` and is
-physically populated. The SoC `canE` interface exists in Linux, but the
-optional slot-C physical CAN module is not installed on this unit. Software
-interface presence alone does not establish that a physical CAN transceiver
-is present.
+The physical IOT-GATE P8 CAN path used in the validated bench is empirically
+confirmed as Linux interface `canE`, backed by FlexCAN2 at `308d0000.can`.
+`canC` maps to `308c0000.can` and did not correspond to the tested P8 path.
+The observed mapping is specific to Device 0; a Linux CAN interface existing
+in software does not by itself prove a physical CAN transceiver is populated
+or connected to it.
 
 The external Waveshare USB-CAN-A is a separate bench CAN node, identified by
 USB VID:PID `1a86:7523` and the CH341 driver. Its tty number is dynamic; it
 must be discovered by USB identity and not assumed to be `/dev/ttyUSB0`.
 `tools/pt-usb-can.py` uses Waveshare's published serial-to-CAN protocol
 directly and does not change PowerTune CAN runtime behavior or configure
-Linux CAN interfaces. See [CAN_BENCH_TESTING.md](CAN_BENCH_TESTING.md) for
+Linux CAN interfaces. Device 0 validated 456#CAFEBABE from `canE` to
+Waveshare and 123#DEADBEEF from Waveshare to `canE` with an approximately
+60.4-ohm completed bus. See [CAN_BENCH_TESTING.md](CAN_BENCH_TESTING.md) for
 protocol provenance, dependencies, the P8 pinout, termination arrangement,
-CLI, and the unrun Device 0 qualification steps.
+CLI, and the recorded bench procedure. The K-Pro telemetry prototype and its
+source limitations are documented in
+[HONDATA_KPRO_CAN.md](HONDATA_KPRO_CAN.md); K-Pro output has not been validated
+on this bench.
 
 ## GPS and EC25 modem
 

@@ -332,3 +332,43 @@ network interfaces and provides no sender authentication or filtering.
 **What not to do:** Do not couple normalized-value reception back to ECU
 selection, CAN availability, or bundled publisher choice. Do not silently
 narrow the bind address without verifying publisher compatibility.
+
+## PT-014 — Separate K-Pro telemetry decoding from PowerTune publishing
+
+**Context:** Hondata publishes K-Pro4 CAN output tables, while PowerTuneDash
+accepts normalized `identifier,value` records over UDP. The Device 0 physical
+CAN bench and the PowerTune UDP presentation boundary have each been
+validated independently; actual K-Pro output has not been validated.
+
+**Decision:** Keep K-Pro profile/frame decoding in a transport- and
+PowerTune-independent module. SocketCAN, candump replay, and deterministic
+scenario input feed typed signal state. A separate publisher translates only
+source/property-equivalent verified signals to the existing PowerTune IDs.
+SocketCAN use requires an explicit interface. The bridge is telemetry-only
+and does not transmit CAN frames.
+
+**Rationale:** Signal layouts and CAN interface names must not leak into the
+PowerTune display boundary. Unmapped decoded signals remain diagnostic/state
+data, and the UDP grammar and 407-ID table remain unchanged.
+
+**Evidence and status:** Signal names, field widths/order, conversions,
+standard-ID profile, endian format, bitrate, and update-rate descriptions
+come from Hondata's official KManager CAN-output pages, cited in
+[`HONDATA_KPRO_CAN.md`](HONDATA_KPRO_CAN.md). The pages omit explicit
+byte offsets, per-ID DLCs, most signedness, value ranges, and invalid
+encodings; the prototype derives packed offsets/DLC from listed field order
+and treats fields as unsigned unless explicitly signed. Those assumptions
+are called out and remain unvalidated. Device 0 empirically uses `canE`
+(`308d0000.can`) for the P8 bench, but the bridge does not default to that or
+any interface. Actual K-Pro and vehicle validation remain pending.
+
+**Compatibility impact:** Only verified normalized mappings are published:
+RPM 179, speed 199, MAP 155, TPS 210, and ECT 221. No new PowerTune ID or
+record grammar is introduced. Stale/invalid values are not published; the
+existing dashboard cannot represent their validity and retains its last
+displayed value.
+
+**What not to do:** Do not infer signal definitions from proprietary
+PowerTuneDigital binaries, assume `can0`, `canC`, or `canE` in reusable
+decoder code, publish unmapped signals, or treat synthetic fixtures as
+vehicle validation.

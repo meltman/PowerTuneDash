@@ -2,17 +2,18 @@
 
 This is a stand-alone bench procedure for the external Waveshare USB-CAN-A.
 It does not change PowerTuneDash CAN setup, ECU selection, daemon selection,
-or networking behavior. The utility speaks the adapter's serial-to-CAN
+or networking behavior. `pt-usb-can.py` speaks the adapter's serial-to-CAN
 protocol directly; it does not use SLCAN, SocketCAN, or CAN FD.
 
 ## Device 0 hardware
 
 The validated Device 0 configuration has:
 
-* `canC` mapped to the physically populated onboard FlexCAN controller
-  (`308c0000.can`).
-* `canE` present as a Linux SoC FlexCAN interface, but the optional physical
-  slot-C CAN hardware is not populated on this particular unit.
+* The P8 path used for this bench is empirically confirmed as `canE`, backed
+  by FlexCAN2 at `308d0000.can`.
+* `canC` (`308c0000.can`) is a different SoC controller and did not correspond
+  to the tested P8 path. Interface presence alone does not establish that a
+  physical transceiver is connected to that interface.
 * An external Waveshare USB-CAN-A with USB VID:PID `1a86:7523`, using the
   CH341 driver. Its current tty was `/dev/ttyUSB0`; this is not stable and
   must not be assumed. The EC25 modem also consumes ttyUSB interfaces.
@@ -85,7 +86,8 @@ The utility needs Python 3 and `pyserial` (Yocto package commonly named
 the adapter's tty, and the kernel must provide CH341 support for this adapter.
 The qualification procedure additionally uses `ip` from `iproute2` and
 `candump`/`cansend` from `can-utils`, plus the target's SocketCAN/FlexCAN
-support for `canC`. This task does not add packages or the tool to the
+support for the selected interface (`canE` on the validated Device 0 P8 path).
+This task does not add packages or the tool to the
 PowerTuneDash runtime image.
 
 ## Bench electrical setup
@@ -104,20 +106,22 @@ of the bench bus. The completed, unpowered harness measured approximately
 termination **disabled** with this harness; enabling it would make three
 terminators on the bus.
 
-## First qualification procedure
+## Validated bidirectional bench and qualification procedure
 
-These are the qualification steps for Device 0; this source-only change has
-not wired the hardware or run them.
+Device 0 has validated the bidirectional bench at 500,000 bit/s using the
+Waveshare adapter, `pt-usb-can`, the terminated twisted-pair harness, and
+`canE`. The P8-to-interface mapping is empirical for this unit; do not infer
+it on other hardware.
 
-### Waveshare to `canC`
+### Waveshare to `canE`
 
 Configure the Linux CAN interface explicitly:
 
 ```sh
-ip link set canC down
-ip link set canC type can bitrate 500000
-ip link set canC up
-candump canC
+ip link set canE down
+ip link set canE type can bitrate 500000
+ip link set canE up
+candump canE
 ```
 
 In another terminal, confirm adapter discovery and transmit the test frame:
@@ -127,13 +131,13 @@ python3 tools/pt-usb-can.py discover
 python3 tools/pt-usb-can.py send --can-bitrate 500000 --id 123 --data DEADBEEF
 ```
 
-Expected `candump canC` frame:
+Expected and observed `candump canE` frame:
 
 ```text
 123#DEADBEEF
 ```
 
-### `canC` to Waveshare
+### `canE` to Waveshare
 
 Start the adapter receiver:
 
@@ -141,21 +145,49 @@ Start the adapter receiver:
 python3 tools/pt-usb-can.py receive --can-bitrate 500000
 ```
 
-From another terminal, send on `canC`:
+From another terminal, send on `canE`:
 
 ```sh
-cansend canC 456#CAFEBABE
+cansend canE 456#CAFEBABE
 ```
 
-Expected decoded adapter output includes:
+Observed decoded adapter output includes:
 
 ```text
 Standard data ID 0x456 DLC 4 payload CA FE BA BE
 ```
 
-The utility only configures the USB-CAN-A. The operator explicitly configures
-`canC`; the tool does not invoke PowerTune's `canbitratesetup()`, write
-`/etc/network/interfaces`, assume `can0`, or alter any PowerTune setting.
+## K-Pro bridge bench integration
+
+The following is a future bench-only qualification sequence, not a K-Pro
+capture and not run as part of this source change. It sends a synthetic
+manufacturer-table-shaped telemetry frame through the existing Waveshare
+bench node; it does not transmit a frame to an ECU or implement ECU control.
+
+With `canE` configured as above and `candump canE` confirming the bus, start
+the bridge in another terminal:
+
+```sh
+python3 tools/kpro-powertune-bridge.py --can-interface canE --profile hondata-motec --diagnostic
+```
+
+In the Waveshare terminal, transmit the synthetic 0x660 layout for 800 rpm,
+0 kph, gear 1, and 12.0 V:
+
+```sh
+python3 tools/pt-usb-can.py send --can-bitrate 500000 --id 660 --data 032000000178
+```
+
+The bridge should decode those fields and show the mapped records `179,800`
+and `199,0` in diagnostic output. PowerTune's receiver may ignore identifier
+199 when `ExternalSpeed` is nonzero. This test checks the documented bridge
+boundary only; it does not validate any signal against a K-Pro device or a
+vehicle. Do not treat generated scenario data as a real K-Pro capture.
+
+`pt-usb-can.py` configures only the USB-CAN-A. The operator explicitly
+configures the selected Linux CAN interface; neither bench utility invokes
+PowerTune's `canbitratesetup()`, writes `/etc/network/interfaces`, assumes
+`can0`, `canC`, or `canE`, or alters any PowerTune setting.
 
 ## Future integration boundary
 
@@ -165,14 +197,31 @@ integration flow:
 ```text
 synthetic/documented CAN frames
     -> physical CAN bench
-    -> canC
-    -> future K-Pro decoder
+    -> selected SocketCAN interface (validated Device 0 P8 path: canE)
+    -> K-Pro profile decoder (prototype; actual K-Pro output unvalidated)
     -> documented PowerTune UDP integration interface
     -> gauge
 ```
 
-No Hondata decoder is implemented here. Any future K-Pro signal definitions
-must come from official Hondata documentation and/or independently collected
-bus observations, not proprietary daemon implementations. See
+The prototype accepts an explicit CAN interface, classic candump replay, or
+a deterministic JSON scenario. It does not transmit CAN. Its scenario frames
+are synthesized from the decoder's shared signal definitions and are not
+vehicle captures. Run it against the fixtures with:
+
+```sh
+python3 tools/kpro-powertune-bridge.py --replay tests/fixtures/hondata/representative.candump --replay-speed 0 --diagnostic
+python3 tools/kpro-powertune-bridge.py --scenario tests/fixtures/hondata/acceleration.json --replay-speed 0 --diagnostic
+```
+
+Hondata's official field tables and the prototype's limitations are listed
+in [HONDATA_KPRO_CAN.md](HONDATA_KPRO_CAN.md). Do not derive signal
+definitions from proprietary daemon implementations. See
 [DAEMON_UDP_PROTOCOL.md](DAEMON_UDP_PROTOCOL.md) for the PowerTune-side UDP
 interface.
+
+The bridge uses Python 3 standard-library modules only. Live input requires
+Linux SocketCAN/FlexCAN support and permission to open the selected interface.
+`pt-usb-can.py` separately requires `pyserial` (Yocto package commonly
+`python3-pyserial`) and CH341 kernel support. The documented interface setup
+and `candump`/`cansend` checks use `iproute2` and `can-utils`. No runtime image
+packages are added by this change.

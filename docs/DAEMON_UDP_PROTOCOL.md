@@ -4,6 +4,13 @@ This document describes the UDP input interface implemented by the GPLv3-license
 
 The identifier mappings below are derived from PowerTuneDash `udpreceiver` source and Device 0 behavioral validation. This is the PowerTune-side integration boundary for independent publishers: any publisher may supply normalized values by sending valid documented records, and it need not be a bundled ECU daemon. The receiver source does not establish ECU applicability, signal units, or freshness guarantees, so these remain unknown unless explicitly documented below.
 
+The original K-Pro telemetry prototype in
+[`HONDATA_KPRO_CAN.md`](HONDATA_KPRO_CAN.md) sends only its verified
+source/property-equivalent mappings to this unchanged interface. K-Pro frame
+definitions are sourced from official Hondata KManager tables; decoder
+limitations and unvalidated assumptions are recorded there. This is not a
+PowerTuneDigital daemon protocol or implementation.
+
 ## Transport and record format
 
 - **Transport:** UDP datagrams.

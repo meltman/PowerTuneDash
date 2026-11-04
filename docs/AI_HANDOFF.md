@@ -91,9 +91,19 @@ unverified. Do not guess or present source inspection as runtime validation.
   PowerTuneDash runtime integration. It discovers VID:PID `1a86:7523` rather
   than assuming a tty number and uses Waveshare's published serial-CAN
   protocol. Do not have this utility configure `canC`, `canE`, `can0`, or
-  PowerTune's CAN settings implicitly. Read `docs/CAN_BENCH_TESTING.md` before
-  bench use; its Device 0 hardware procedure is documented but has not yet
-  been run on the target.
+  PowerTune's CAN settings implicitly. Device 0 has validated the bidirectional
+  bench on `canE` at 500 kbit/s; `canE` is an empirical Device 0 P8 mapping,
+  not a default for other hardware. Read `docs/CAN_BENCH_TESTING.md` before
+  bench use.
+* `tools/kpro_can.py` decodes the official Hondata K-Pro4 CAN-output tables;
+  `tools/powertune_udp.py` owns the separate verified mapping to PowerTune
+  UDP IDs. The bridge requires an explicit SocketCAN interface, supports
+  candump replay and deterministic scenarios, and does not transmit CAN.
+  Offsets/DLCs are derived from published field order/width and unsigned
+  interpretation is assumed where Hondata does not specify signedness. These
+  details and all unvalidated aspects are documented in
+  `docs/HONDATA_KPRO_CAN.md`; actual K-Pro and vehicle validation remain
+  pending.
 * Do not add, redistribute, execute, reverse engineer, modify, or depend upon
   PowerTuneDigital proprietary ECU daemon binaries in this fork. Independent
   integration publishers should target the documented PowerTune UDP

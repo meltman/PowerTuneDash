@@ -1,0 +1,137 @@
+{
+  "profile": "hondata-motec",
+  "events": [
+    {
+      "name": "ignition-on idle",
+      "at_ms": 0,
+      "signals": {
+        "rpm": "800",
+        "speed_kph": "0",
+        "gear": "1",
+        "voltage_v": "12",
+        "tps_pct": "0",
+        "ect_c": "75",
+        "map_kpa": "35"
+      },
+      "expected": {
+        "rpm": "800",
+        "speed_kph": "0",
+        "gear": "1",
+        "voltage_v": "12",
+        "tps_pct": "0",
+        "ect_c": "75",
+        "map_kpa": "35"
+      }
+    },
+    {
+      "name": "warm idle",
+      "at_ms": 100,
+      "signals": {
+        "rpm": "850",
+        "speed_kph": "0",
+        "gear": "1",
+        "voltage_v": "12",
+        "tps_pct": "2",
+        "ect_c": "85",
+        "map_kpa": "35"
+      },
+      "expected": {
+        "rpm": "850",
+        "speed_kph": "0",
+        "gear": "1",
+        "voltage_v": "12",
+        "tps_pct": "2",
+        "ect_c": "85",
+        "map_kpa": "35"
+      }
+    },
+    {
+      "name": "steady cruise",
+      "at_ms": 200,
+      "signals": {
+        "rpm": "2200",
+        "speed_kph": "80",
+        "gear": "4",
+        "voltage_v": "14",
+        "tps_pct": "18",
+        "ect_c": "90",
+        "map_kpa": "60"
+      },
+      "expected": {
+        "rpm": "2200",
+        "speed_kph": "80",
+        "gear": "4",
+        "voltage_v": "14",
+        "tps_pct": "18",
+        "ect_c": "90",
+        "map_kpa": "60"
+      }
+    },
+    {
+      "name": "acceleration",
+      "at_ms": 300,
+      "signals": {
+        "rpm": "3500",
+        "speed_kph": "100",
+        "gear": "3",
+        "voltage_v": "14",
+        "tps_pct": "45",
+        "ect_c": "90",
+        "map_kpa": "120"
+      },
+      "expected": {
+        "rpm": "3500",
+        "speed_kph": "100",
+        "gear": "3",
+        "voltage_v": "14",
+        "tps_pct": "45",
+        "ect_c": "90",
+        "map_kpa": "120"
+      }
+    },
+    {
+      "name": "deceleration",
+      "at_ms": 400,
+      "signals": {
+        "rpm": "1800",
+        "speed_kph": "50",
+        "gear": "3",
+        "voltage_v": "13",
+        "tps_pct": "0",
+        "ect_c": "90",
+        "map_kpa": "35"
+      },
+      "expected": {
+        "rpm": "1800",
+        "speed_kph": "50",
+        "gear": "3",
+        "voltage_v": "13",
+        "tps_pct": "0",
+        "ect_c": "90",
+        "map_kpa": "35"
+      }
+    },
+    {
+      "name": "high RPM",
+      "at_ms": 500,
+      "signals": {
+        "rpm": "6000",
+        "speed_kph": "120",
+        "gear": "4",
+        "voltage_v": "14",
+        "tps_pct": "80",
+        "ect_c": "95",
+        "map_kpa": "160"
+      },
+      "expected": {
+        "rpm": "6000",
+        "speed_kph": "120",
+        "gear": "4",
+        "voltage_v": "14",
+        "tps_pct": "80",
+        "ect_c": "95",
+        "map_kpa": "160"
+      }
+    }
+  ]
+}

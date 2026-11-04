@@ -46,9 +46,14 @@ open-source work, or independently obtained bus observations. Do not derive,
 reverse engineer, or copy ECU signal semantics or decoding from
 PowerTuneDigital proprietary daemon implementations.
 
-In particular, a future Hondata K-Pro decoder must use official Hondata
-documentation and/or independently collected bus observations. This fork
-does not implement Hondata decoding.
+In particular, Hondata K-Pro decoding in this fork uses only the official
+KManager CAN-output tables cited in
+[`HONDATA_KPRO_CAN.md`](HONDATA_KPRO_CAN.md). The documented field order and
+widths permit a prototype decoder, but several wire-layout details remain
+unpublished and the prototype has not been validated against K-Pro output.
+Future refinements must use official Hondata clarification and/or
+independently collected bus observations. The bridge does not use or require
+proprietary daemon material.
 
 ## Unresolved licensing helper
 
