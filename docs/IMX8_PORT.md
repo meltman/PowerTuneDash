@@ -232,6 +232,75 @@ The source establishes the optional Logo lookup and translation behavior; it
 does not by itself establish an end-to-end Device 0 test for present or absent
 user artwork. Record that target result only after testing the target image.
 
+## Legacy ECU daemon compatibility (static findings)
+
+The startup-daemon setting in `Settings/startup.qml` stores a ComboBox index.
+The “Hondata 20Hz” choice maps to `daemons/Hondatad`; “Hondata 100Hz” maps to
+`daemons/HondataS300`. These are UI labels, not measured update rates.
+`Connect::daemonstartup()` generates `/home/pi/startdaemon.sh`, changes to
+`/home/pi/daemons`, brings up `can0`, and runs one selected daemon without
+arguments. `Connect::restartDaemon()` launches that script. The application
+settings flow also calls `Connect::canbitratesetup()`, which writes legacy
+`/etc/network/interfaces` CAN configuration and requests a reboot. The script
+selects one daemon, but the GUI does not enforce that only one daemon process
+exists. It does not supervise daemon failure or stop the daemon when its UDP
+receiver is closed. The GUI's restart path can display captured process
+output in its status property, but no daemon log-file path is configured
+here. No in-repository boot/init hook invoking the generated script was
+identified; the installed image's startup mechanism remains to be checked.
+
+Static inspection identifies both Hondata files as ELF32, little-endian ARM
+EABI5 hard-float executables, dynamically linked through
+`/lib/ld-linux-armhf.so.3` and requiring `libc.so.6` (GLIBC_2.4). They are not
+AArch64 binaries:
+
+| File | SHA-256 |
+|---|---|
+| `daemons/Hondatad` | `6e2f1eafc3d8038b58453f882a15195a6c040579b51b25d61ce4b4a5b855afed` |
+| `daemons/HondataS300` | `541fd93f1fbd265d3f5800af74379a1a2f8ec3a10f71252a51ab1d0f1d6abed1` |
+
+Both import networking and CAN-related functions, and their visible strings
+include K-Pro/S300 CAN protocol labels and text records shaped like
+`identifier,value`. The GUI's `udpreceiver` binds UDP port `45454`, parses
+each received datagram as that text pair, and maps identifiers to individual
+`DashBoard` properties (for example `179` to RPM, `155` to MAP, and `199` to
+speed). The source contains 407 identifier cases, including unused cases.
+This is not a fixed global structure. Static inspection did not establish the
+Hondata sender's destination port, update rate, or full packet semantics;
+those require an authorized runtime capture.
+
+The daemon-adjacent readme says a valid license is required. Both Hondata
+binaries contain strings for `Licence.lic`, `eth0`, and license-valid/invalid
+messages, but strings do not prove the exact file path, enforcement point, or
+failure behavior. Across the 65 ELF files in `daemons/`, 52 contain a
+`Licence.lic` string and 50 contain the visible valid/invalid status strings;
+this is not evidence that every daemon shares one licensing mechanism.
+The GUI's `RequestLicence()` refers to `/home/pi/licencerequest` and
+`/home/pi/Licrequest.lic`, while the repository artifact is named
+`daemons/LicenceRequest` (different case and location). No in-repository
+caller or copy step connecting that GUI helper/key setting to
+`daemons/Licence.lic` was found. `AppSettings::getDaemonActivationKey()`
+derives a zero-padded decimal string from the last three octets of the
+`eth0` MAC (or returns `000-000-000` if unavailable), but no in-repository
+caller was found; `writeDaemonLicenseKey()` only stores a Qt setting and
+updates a dashboard property. Do not infer license generation, enforcement,
+or bypass from these static clues.
+
+On a standard 64-bit i.MX8Plus userspace these ARM32 binaries are not native.
+Running them would require a compatible ARM32 hard-float kernel/userspace,
+including the loader and libraries; target kernel compatibility and runtime
+availability have not been verified. The `/home/pi` and `can0` assumptions
+are additional integration dependencies. No daemon was executed for this
+assessment.
+
+Hondata's [K-Pro product information](https://www.hondata.com/kpro) confirms
+that dash output is available over serial and CAN, but that page does not
+publish signal definitions. A compatible replacement could retain the GUI
+interface by emitting the existing identifier/value UDP records to port
+`45454`; implementing K-Pro CAN decoding requires authoritative manufacturer
+signal documentation. Do not infer signal definitions from daemon strings or
+recreate licensing behavior.
+
 ## Recovery and U-Boot
 
 The validated Linux U-Boot environment geometry is:
