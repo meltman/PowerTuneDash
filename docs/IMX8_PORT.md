@@ -168,12 +168,15 @@ must be discovered by USB identity and not assumed to be `/dev/ttyUSB0`.
 directly and does not change PowerTune CAN runtime behavior or configure
 Linux CAN interfaces. Device 0 validated 456#CAFEBABE from `canE` to
 Waveshare and 123#DEADBEEF from Waveshare to `canE` with an approximately
-60.4-ohm completed bus. See [CAN_BENCH_TESTING.md](CAN_BENCH_TESTING.md) for
-protocol provenance, dependencies, the P8 pinout, termination arrangement,
-CLI, and the recorded bench procedure. The K-Pro telemetry prototype and its
-source limitations are documented in
-[HONDATA_KPRO_CAN.md](HONDATA_KPRO_CAN.md); K-Pro output has not been validated
-on this bench.
+60.4-ohm completed bus. A synthetic manufacturer-format K-Pro frame
+(`0x660#032000000178`) has also been validated end-to-end through `canE`,
+the bridge, PowerTune UDP `179,800`, and the existing 800-RPM gauge. This is
+synthetic integration evidence, not actual K-Pro or vehicle validation. See
+[CAN_BENCH_TESTING.md](CAN_BENCH_TESTING.md) for protocol provenance,
+dependencies, the P8 pinout, termination arrangement, CLI, and recorded
+bench procedure. K-Pro source limitations and workload tooling are documented
+in [HONDATA_KPRO_CAN.md](HONDATA_KPRO_CAN.md) and
+[KPRO_SYNTHETIC_WORKLOADS.md](KPRO_SYNTHETIC_WORKLOADS.md).
 
 ## GPS and EC25 modem
 

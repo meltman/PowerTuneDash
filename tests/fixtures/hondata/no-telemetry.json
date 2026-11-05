@@ -1,0 +1,10 @@
+{
+  "name": "no-telemetry",
+  "workload_class": "P0",
+  "duration_seconds": 10,
+  "tick_ms": 50,
+  "can_bitrate": 500000,
+  "profile": "hondata-motec",
+  "frame_rate_hz": 0,
+  "signals": {}
+}

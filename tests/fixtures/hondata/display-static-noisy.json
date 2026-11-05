@@ -1,0 +1,23 @@
+{
+  "name": "display-static-bus-noisy",
+  "workload_class": "P6",
+  "duration_seconds": 10,
+  "tick_ms": 5,
+  "can_bitrate": 500000,
+  "profile": "hondata-motec",
+  "frame_rate_hz": 200,
+  "publication_epsilon": {"rpm": 5, "speed_kph": 1, "tps_pct": 1, "map_kpa": 1, "ect_c": 1},
+  "signals": {
+    "rpm": {"type": "keyframes", "interpolation": "step", "keyframes": [{"at_seconds": 0, "value": 800}, {"at_seconds": 5, "value": 802}, {"at_seconds": 8, "value": 820}, {"at_seconds": 10, "value": 820}]},
+    "speed_kph": {"type": "keyframes", "interpolation": "step", "keyframes": [{"at_seconds": 0, "value": 0}, {"at_seconds": 5, "value": 0.5}, {"at_seconds": 8, "value": 10}, {"at_seconds": 10, "value": 10}]},
+    "gear": {"type": "constant", "value": 0},
+    "voltage_v": {"type": "constant", "value": 14},
+    "iat_c": {"type": "constant", "value": 30},
+    "ect_c": {"type": "constant", "value": 90},
+    "mil": {"type": "constant", "value": 0},
+    "vts": {"type": "constant", "value": 0},
+    "closed_loop": {"type": "constant", "value": 1},
+    "tps_pct": {"type": "constant", "value": 1},
+    "map_kpa": {"type": "constant", "value": 35}
+  }
+}

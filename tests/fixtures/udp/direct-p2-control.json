@@ -1,0 +1,10 @@
+{
+  "interval_ms": 100,
+  "signals": {
+    "rpm": [3000],
+    "speed": [100],
+    "map": [65],
+    "tps": [25],
+    "coolant": [90]
+  }
+}

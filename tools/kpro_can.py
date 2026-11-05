@@ -1,7 +1,7 @@
 """Pure data decoder for the published Hondata K-Pro4 CAN tables."""
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Iterable, List, Mapping, Optional, Tuple
 
 
@@ -289,9 +289,12 @@ def _encode_raw(field, value):
         raw = Decimal(32768) / value
     else:
         raw = value * field.divisor
-    if raw != raw.to_integral_value():
-        raise ValueError(f"{field.name} value does not map to an integer raw value")
-    return int(raw)
+    rounded = raw.to_integral_value(rounding=ROUND_HALF_UP)
+    minimum = Decimal(-(1 << (field.bits - 1)) if field.signed else 0)
+    maximum = Decimal((1 << (field.bits - (1 if field.signed else 0))) - 1)
+    if rounded < minimum or rounded > maximum:
+        raise ValueError(f"{field.name} raw value is outside its {field.bits}-bit range")
+    return int(rounded)
 
 
 class SignalTracker:

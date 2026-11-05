@@ -3,6 +3,7 @@
 
 import argparse
 from contextlib import contextmanager
+from dataclasses import asdict, dataclass
 import json
 import math
 import re
@@ -30,6 +31,35 @@ CAN_DUMP_FRAME = re.compile(
     r"^(?P<canid>[0-9A-Fa-f]{1,8})#(?P<data>(?:[0-9A-Fa-f]{2})*|R[0-8])$"
 )
 CAN_DUMP_TIMESTAMP = re.compile(r"^\((?P<timestamp>\d+(?:\.\d+)?)\)$")
+
+
+@dataclass
+class BridgeMetrics:
+    generated_can_frames: int = 0
+    transmitted_can_frames: int = 0
+    received_can_frames: int = 0
+    decoded_frames: int = 0
+    ignored_frames: int = 0
+    malformed_frames: int = 0
+    decoded_signal_updates: int = 0
+    valid_signal_changes: int = 0
+    unchanged_signal_suppressions: int = 0
+    udp_records_sent: int = 0
+    stale_transitions: int = 0
+    invalid_transitions: int = 0
+    elapsed_seconds: float = 0.0
+
+    def summary(self):
+        result = asdict(self)
+        result["effective_frame_rate_hz"] = (
+            self.received_can_frames / self.elapsed_seconds
+            if self.elapsed_seconds > 0 else 0.0
+        )
+        result["effective_udp_publication_rate_hz"] = (
+            self.udp_records_sent / self.elapsed_seconds
+            if self.elapsed_seconds > 0 else 0.0
+        )
+        return result
 
 
 class SocketCanSource:
@@ -202,6 +232,8 @@ def make_parser():
                         help="mark a signal stale after this many seconds (default: 2)")
     parser.add_argument("--diagnostic", action="store_true",
                         help="show decoded values, validity changes, and UDP records")
+    parser.add_argument("--summary", action="store_true",
+                        help="print bounded processing metrics on exit")
     return parser
 
 
@@ -214,25 +246,44 @@ def open_udp_socket(socket_factory=socket.socket):
         udp_socket.close()
 
 
-def _process_frame(frame, profile, tracker, publisher, now, diagnostics=None):
+def _process_frame(
+    frame, profile, tracker, publisher, now, diagnostics=None, metrics=None
+):
     try:
         signals = decode_frame(frame, profile)
     except FrameDecodeError as exc:
+        if metrics:
+            metrics.malformed_frames += 1
         if diagnostics:
             diagnostics.write(f"invalid frame: {exc}")
         return
     if not signals:
+        if metrics:
+            metrics.ignored_frames += 1
         return
+    if metrics:
+        metrics.decoded_frames += 1
 
     for signal in signals:
+        if metrics:
+            metrics.decoded_signal_updates += 1
         changed = tracker.update(signal, now, frame.timestamp)
+        if metrics and changed and signal.valid:
+            metrics.valid_signal_changes += 1
+        if metrics and changed and not signal.valid:
+            metrics.invalid_transitions += 1
         if diagnostics and changed:
             value = "invalid" if not signal.valid else str(signal.value)
             diagnostics.write(
                 f"decoded {signal.name}={value} {signal.unit} "
                 f"CAN ID 0x{signal.can_id:03X}"
             )
+        is_mapped = signal.valid and signal.value is not None and signal.name in publisher.identifier_map
         packet = publisher.publish(signal)
+        if metrics and packet is not None:
+            metrics.udp_records_sent += 1
+        elif metrics and is_mapped:
+            metrics.unchanged_signal_suppressions += 1
         if packet is not None and diagnostics:
             diagnostics.write(
                 f"UDP {packet.decode('ascii')} -> "
@@ -254,53 +305,74 @@ def run_bridge(args, socket_factory=socket.socket, sleep=time.sleep, now=time.mo
         DiagnosticLimiter(emit, now=now) if args.diagnostic else None
     )
     destination = (args.udp_host, args.udp_port)
+    metrics = BridgeMetrics()
+    started = now()
 
-    with open_udp_socket(socket_factory) as udp_socket:
-        publisher = PowerTunePublisher(udp_socket.sendto, destination)
-        if args.replay:
-            with open(args.replay, encoding="ascii") as replay_file:
-                frames = iter_replay(replay_file, args.replay_speed, sleep)
-                for frame in frames:
+    try:
+        with open_udp_socket(socket_factory) as udp_socket:
+            publisher = PowerTunePublisher(udp_socket.sendto, destination)
+            if args.replay:
+                with open(args.replay, encoding="ascii") as replay_file:
+                    frames = iter_replay(replay_file, args.replay_speed, sleep)
+                    for frame in frames:
+                        current = now()
+                        metrics.received_can_frames += 1
+                        stale = tracker.mark_stale(current, args.stale_after)
+                        metrics.stale_transitions += len(stale)
+                        for signal_name in stale:
+                            if diagnostics:
+                                diagnostics.write(f"signal {signal_name} stale")
+                        _process_frame(
+                            frame, args.profile, tracker, publisher, current,
+                            diagnostics, metrics,
+                        )
+                return
+
+            if args.scenario:
+                with open(args.scenario, encoding="utf-8") as scenario_file:
+                    scenario = json.load(scenario_file)
+                profile = scenario.get("profile", args.profile)
+                tracker = SignalTracker(profile)
+                for frame in iter_scenario(
+                    scenario, args.replay_speed, sleep, default_profile=args.profile
+                ):
                     current = now()
-                    for signal_name in tracker.mark_stale(current, args.stale_after):
+                    metrics.received_can_frames += 1
+                    stale = tracker.mark_stale(current, args.stale_after)
+                    metrics.stale_transitions += len(stale)
+                    for signal_name in stale:
                         if diagnostics:
                             diagnostics.write(f"signal {signal_name} stale")
                     _process_frame(
-                        frame, args.profile, tracker, publisher, current, diagnostics
+                        frame, profile, tracker, publisher, current,
+                        diagnostics, metrics,
                     )
-            return
+                return
 
-        if args.scenario:
-            with open(args.scenario, encoding="utf-8") as scenario_file:
-                scenario = json.load(scenario_file)
-            profile = scenario.get("profile", args.profile)
-            tracker = SignalTracker(profile)
-            for frame in iter_scenario(
-                scenario, args.replay_speed, sleep, default_profile=args.profile
-            ):
-                current = now()
-                for signal_name in tracker.mark_stale(current, args.stale_after):
-                    if diagnostics:
-                        diagnostics.write(f"signal {signal_name} stale")
-                _process_frame(frame, profile, tracker, publisher, current, diagnostics)
-            return
-
-        with SocketCanSource(args.can_interface, socket_factory) as source:
-            if diagnostics:
-                diagnostics.write(
-                    f"listening on SocketCAN interface {args.can_interface}; "
-                    f"PowerTune UDP destination {destination[0]}:{destination[1]}"
-                )
-            while True:
-                frame = source.receive()
-                current = now()
-                for signal_name in tracker.mark_stale(current, args.stale_after):
-                    if diagnostics:
-                        diagnostics.write(f"signal {signal_name} stale")
-                if frame is not None:
-                    _process_frame(
-                        frame, args.profile, tracker, publisher, current, diagnostics
+            with SocketCanSource(args.can_interface, socket_factory) as source:
+                if diagnostics:
+                    diagnostics.write(
+                        f"listening on SocketCAN interface {args.can_interface}; "
+                        f"PowerTune UDP destination {destination[0]}:{destination[1]}"
                     )
+                while True:
+                    frame = source.receive()
+                    current = now()
+                    stale = tracker.mark_stale(current, args.stale_after)
+                    metrics.stale_transitions += len(stale)
+                    for signal_name in stale:
+                        if diagnostics:
+                            diagnostics.write(f"signal {signal_name} stale")
+                    if frame is not None:
+                        metrics.received_can_frames += 1
+                        _process_frame(
+                            frame, args.profile, tracker, publisher, current,
+                            diagnostics, metrics,
+                        )
+    finally:
+        metrics.elapsed_seconds = max(0.0, now() - started)
+        if args.summary:
+            print(json.dumps(metrics.summary(), indent=2, sort_keys=True))
 
 
 def main(argv=None):

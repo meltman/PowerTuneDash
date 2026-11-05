@@ -372,3 +372,41 @@ displayed value.
 PowerTuneDigital binaries, assume `can0`, `canC`, or `canE` in reusable
 decoder code, publish unmapped signals, or treat synthetic fixtures as
 vehicle validation.
+
+## PT-015 — Deterministic synthetic K-Pro workload model
+
+**Context:** The Device 0 open integration boundary has validated a
+manufacturer-format synthetic `0x660` frame (`03 20 00 00 01 78`) through
+Waveshare, the P8/`canE` bench, the decoder, UDP records `179,800` and
+`199,0`, and the existing 800-RPM gauge. Actual K-Pro output remains
+unvalidated. Repeatable workloads are needed to distinguish bus/decode work,
+normalized UDP publication, and display-side activity without relying on an
+ECU daemon.
+
+**Decision:** Define scenarios in `tools/kpro_workload.py` and generate frames
+from the shared `kpro_can` profile/field definitions. Use one generated frame
+stream for software replay, candump export, and explicit Waveshare
+transmission. Keep scenario evaluation ticks independent from scheduled CAN
+frame rate. The synthetic scheduler is deterministic round-robin, defaults to
+20 total frames/s, and is bounded at 200 frames/s and 200,000 total frames.
+These are workload-tool policies, not claims about K-Pro timing. The cited
+Hondata pages state 100 Hz while cycling through packets; per-frame cadence is
+not specified.
+
+**Rationale:** Sharing IDs, field widths, endian order, conversions, and
+signedness with the decoder prevents a separate synthetic protocol model.
+Deterministic virtual timestamps make frame order independent of wall-clock
+jitter. P0–P6 workloads let the same decoder/publisher path be compared from
+no input through constant values and bounded stress.
+
+**Compatibility and safety:** No dashboard, UDP mapping, CAN runtime, or
+automatic bridge startup changes. `transmit` is an explicit CLI operation
+using the Waveshare USB identity/discovery helper and must be limited to an
+authorized, terminated bench. Tests mock the adapter and never transmit
+physical CAN. Synthetic traffic is not an ECU/K-Pro calibration.
+
+**Documentation:** Scenario definitions, assumptions, fixtures, classes, and
+CLI are in [`KPRO_SYNTHETIC_WORKLOADS.md`](KPRO_SYNTHETIC_WORKLOADS.md).
+Comparison methodology and process sampling are in
+[`PERFORMANCE_PROFILING.md`](PERFORMANCE_PROFILING.md). CPU/RSS/thread/
+context-switch metrics do not establish GPU rendering cost.

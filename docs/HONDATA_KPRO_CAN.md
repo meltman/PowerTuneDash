@@ -18,6 +18,12 @@ The AiM table specifies 11-bit identifiers, big-endian fields, 1 Mbit/s, and
 the same 100 Hz cycling description. Hondata states that KPro4 has no CAN
 termination resistor.
 
+Casey's actual Hondata K-Pro is configured for **1,000,000 bit/s**. Real-
+vehicle validation with this ECU must therefore use 1,000,000 bit/s unless
+the ECU's CAN configuration is deliberately changed. This actual ECU setting
+is separate from the already-qualified 500,000 bit/s Device 0 bench path and
+from the synthetic workload fixtures' default bitrate.
+
 The pages list fields in order and give each field's width and conversion,
 but do **not** explicitly give byte offsets, per-frame DLC, signedness for
 most fields, invalid/reserved encodings, signal value ranges, or a per-ID
@@ -184,6 +190,33 @@ There is no periodic refresh because no PowerTune-side refresh requirement
 has been established. A configurable stale timeout marks state stale and
 stops later publishing; it does not fabricate zero.
 
+## Synthetic workload encoder and validation status
+
+`tools/kpro_workload.py` uses the decoder's `PROFILES`, `FrameSpec`, and
+`FieldSpec` definitions to generate scenario CAN frames; it does not maintain
+a second CAN-ID/offset/width/endian/scaling table. The encoder rounds
+representable raw values half-up to the nearest wire unit. Every scenario
+frame specifies all fields in that packet, so unrequested companion fields
+are not silently fabricated as zero. Wire-capacity validation is not a
+manufacturer sensor-range claim.
+
+The workload model implements deterministic behavior curves, and the CLI
+`tools/kpro-workload.py` uses those generated frames for in-process
+decode/publish replay, candump export, or explicit Waveshare bench
+transmission. Scenario evaluation ticks and total frame
+transmission rate are independent. The synthetic scheduler cycles active
+frame IDs round-robin; its default 20 total frames/s, configurable rate, and
+200 frames/s ceiling are test-workload policy, not K-Pro timing. The official
+Hondata pages state 100 Hz while cycling through packets but do not describe
+the per-frame schedule.
+
+Profiles and assumptions remain important: the encoder and decoder share
+the current packed-offset/derived-DLC and signedness assumptions documented
+above. Encoding test vectors only proves consistency with that decoder; it
+does not validate the assumptions against a K-Pro device. See
+[`KPRO_SYNTHETIC_WORKLOADS.md`](KPRO_SYNTHETIC_WORKLOADS.md) for scenario
+format, fixture list, workload classes, and CLI.
+
 ## Input modes and validation status
 
 ```sh
@@ -204,7 +237,10 @@ Unit tests exercise all published profile fields, field-width boundaries,
 conversions, endian order, ignition signedness, malformed DLC, lambda-zero
 invalidity, unrelated IDs, freshness, stale transitions, duplicate
 suppression, UDP mappings/serialization, replay ordering/timing, and explicit
-interface selection.
+interface selection. Synthetic workload tests additionally cover shared
+encode/decode definitions, behavior types, round-trip precision, deterministic
+scheduling, fixture export, publication suppression/epsilon, stale frame
+stops, invalid-input vectors, and mocked adapter discovery/transmission.
 
 The checked-in replay and scenario fixtures are synthetic test inputs, not
 K-Pro captures. They cover representative idle, warm idle, cruise,
@@ -217,8 +253,11 @@ sensor minima/maxima or reserved encodings.
 **Validation boundary:** source tests and synthetic fixtures do not validate
 the inferred offsets/DLCs, unsigned interpretation, timing, K-Pro setup, or
 vehicle behavior. Device 0's bidirectional CAN transport (`canE` and
-Waveshare USB-CAN-A) and PowerTune's independent UDP presentation path were
-validated separately. Actual K-Pro output, signal values, and an equipped
+Waveshare USB-CAN-A) and PowerTune's independent UDP presentation path have
+now also been exercised end-to-end with a synthetic frame: ID `0x660`,
+payload `03 20 00 00 01 78` decoded to RPM 800 and drove the existing gauge
+through UDP record `179,800`. No physical CAN transmission was performed for
+the workload-tool change. Actual K-Pro output, signal values, and an equipped
 vehicle remain unvalidated. Do not connect this telemetry-only prototype to
 a vehicle until the inferred layout is checked against manufacturer
 clarification or independently captured, safely obtained K-Pro output.

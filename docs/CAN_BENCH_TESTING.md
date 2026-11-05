@@ -157,12 +157,24 @@ Observed decoded adapter output includes:
 Standard data ID 0x456 DLC 4 payload CA FE BA BE
 ```
 
-## K-Pro bridge bench integration
+## K-Pro synthetic workload integration
 
-The following is a future bench-only qualification sequence, not a K-Pro
-capture and not run as part of this source change. It sends a synthetic
-manufacturer-table-shaped telemetry frame through the existing Waveshare
-bench node; it does not transmit a frame to an ECU or implement ECU control.
+This end-to-end synthetic frame has been validated on Device 0, not captured
+from a K-Pro. ID `0x660` with payload `03 20 00 00 01 78` passed through
+Waveshare, the terminated P8/`canE` bus, the bridge, and the UDP receiver;
+decoded RPM was 800 and the existing gauge displayed 800 RPM. This validates
+the open integration path for this vector only, not K-Pro output or vehicle
+behavior.
+
+The Device 0 bench qualification above uses 500,000 bit/s. Casey's actual
+Hondata K-Pro is configured for **1,000,000 bit/s**; real-vehicle validation
+with that ECU must use 1,000,000 bit/s on the CAN bus unless its ECU
+configuration is deliberately changed. The 500,000 bit/s workload fixture
+and bench examples are not evidence of the K-Pro's configured vehicle rate.
+The synthetic workload's signal and frame-generation semantics do not depend
+on bitrate; `can_bitrate` selects the transport rate, and is configurable per
+scenario or with the CLI override. Do not transmit synthetic workloads on a
+connected ECU or vehicle.
 
 With `canE` configured as above and `candump canE` confirming the bus, start
 the bridge in another terminal:
@@ -184,6 +196,32 @@ and `199,0` in diagnostic output. PowerTune's receiver may ignore identifier
 boundary only; it does not validate any signal against a K-Pro device or a
 vehicle. Do not treat generated scenario data as a real K-Pro capture.
 
+The deterministic workload CLI drives the same shared encoder in software,
+candump export, and physical adapter transmission:
+
+```sh
+python3 tools/kpro-workload.py inspect --scenario tests/fixtures/hondata/steady-cruise.json
+python3 tools/kpro-workload.py replay --scenario tests/fixtures/hondata/acceleration-workload.json --no-udp --summary
+python3 tools/kpro-workload.py export --scenario tests/fixtures/hondata/acceleration-workload.json --output /tmp/acceleration.candump
+```
+
+Physical transmission is an explicit action and is not part of this change's
+validation:
+
+```sh
+python3 tools/kpro-workload.py transmit \
+  --scenario tests/fixtures/hondata/acceleration-workload.json \
+  --can-bitrate 500000 --device /dev/ttyUSB3
+```
+
+It reuses the Waveshare USB VID:PID discovery helper, supports `--device` for
+explicit selection, and does not assume a tty index. Scenario and frame rates
+are independent. Workload scheduling is synthetic, round-robin, default 20
+total frames/s and bounded at 200 frames/s; it is not a claim about exact
+per-frame K-Pro timing. Inspect all workload classes and fixtures in
+[KPRO_SYNTHETIC_WORKLOADS.md](KPRO_SYNTHETIC_WORKLOADS.md), and profiling
+comparisons in [PERFORMANCE_PROFILING.md](PERFORMANCE_PROFILING.md).
+
 `pt-usb-can.py` configures only the USB-CAN-A. The operator explicitly
 configures the selected Linux CAN interface; neither bench utility invokes
 PowerTune's `canbitratesetup()`, writes `/etc/network/interfaces`, assumes
@@ -191,8 +229,8 @@ PowerTune's `canbitratesetup()`, writes `/etc/network/interfaces`, assumes
 
 ## Future integration boundary
 
-The bench transport is intended to support a future, independently sourced
-integration flow:
+The bench transport and synthetic workload tool support this independently
+sourced integration flow:
 
 ```text
 synthetic/documented CAN frames
@@ -203,14 +241,16 @@ synthetic/documented CAN frames
     -> gauge
 ```
 
-The prototype accepts an explicit CAN interface, classic candump replay, or
-a deterministic JSON scenario. It does not transmit CAN. Its scenario frames
-are synthesized from the decoder's shared signal definitions and are not
-vehicle captures. Run it against the fixtures with:
+The bridge accepts an explicit CAN interface, classic candump replay, or the
+legacy deterministic bridge JSON scenario. The workload CLI also supports
+the behavior-based scenario format, software replay, candump export, and
+explicit physical transmission through Waveshare. Its synthetic scenario
+frames are not vehicle captures. Run software-only tests with:
 
 ```sh
 python3 tools/kpro-powertune-bridge.py --replay tests/fixtures/hondata/representative.candump --replay-speed 0 --diagnostic
 python3 tools/kpro-powertune-bridge.py --scenario tests/fixtures/hondata/acceleration.json --replay-speed 0 --diagnostic
+python3 tools/kpro-workload.py replay --scenario tests/fixtures/hondata/maximum-activity.json --no-udp --summary
 ```
 
 Hondata's official field tables and the prototype's limitations are listed

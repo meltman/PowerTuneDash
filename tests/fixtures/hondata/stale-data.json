@@ -1,0 +1,23 @@
+{
+  "name": "stale-selected-frame",
+  "workload_class": "P3",
+  "duration_seconds": 5,
+  "tick_ms": 50,
+  "can_bitrate": 500000,
+  "profile": "hondata-motec",
+  "frame_rate_hz": 20,
+  "stop_frames_after_seconds": {"0x661": 1},
+  "signals": {
+    "rpm": {"type": "constant", "value": 800},
+    "speed_kph": {"type": "constant", "value": 0},
+    "gear": {"type": "constant", "value": 0},
+    "voltage_v": {"type": "constant", "value": 14},
+    "iat_c": {"type": "constant", "value": 30},
+    "ect_c": {"type": "constant", "value": 90},
+    "mil": {"type": "constant", "value": 0},
+    "vts": {"type": "constant", "value": 0},
+    "closed_loop": {"type": "constant", "value": 1},
+    "tps_pct": {"type": "constant", "value": 1},
+    "map_kpa": {"type": "constant", "value": 35}
+  }
+}

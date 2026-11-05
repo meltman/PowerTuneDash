@@ -99,11 +99,19 @@ unverified. Do not guess or present source inspection as runtime validation.
   `tools/powertune_udp.py` owns the separate verified mapping to PowerTune
   UDP IDs. The bridge requires an explicit SocketCAN interface, supports
   candump replay and deterministic scenarios, and does not transmit CAN.
-  Offsets/DLCs are derived from published field order/width and unsigned
-  interpretation is assumed where Hondata does not specify signedness. These
-  details and all unvalidated aspects are documented in
-  `docs/HONDATA_KPRO_CAN.md`; actual K-Pro and vehicle validation remain
-  pending.
+  `tools/kpro-workload.py` uses those shared field definitions for scenario
+  generation, software replay/export, and explicit Waveshare transmission;
+  do not invoke its `transmit` mode except on an authorized, terminated bench.
+  Synthetic scheduling is round-robin and not hardware-validated K-Pro
+  timing. Hondata's cited tables state 100 Hz while cycling packets; exact
+  per-frame timing remains unknown. See `docs/KPRO_SYNTHETIC_WORKLOADS.md`
+  and `docs/PERFORMANCE_PROFILING.md`. Offsets/DLCs are derived from
+  published field order/width and unsigned interpretation is assumed where
+  Hondata does not specify signedness. Actual K-Pro and vehicle validation
+  remain pending. Casey's actual K-Pro is configured for 1,000,000 bit/s;
+  real-vehicle validation must use that rate unless the ECU configuration is
+  deliberately changed. The 500,000 bit/s synthetic fixture default is for
+  the qualified bench path, and does not affect synthetic workload semantics.
 * Do not add, redistribute, execute, reverse engineer, modify, or depend upon
   PowerTuneDigital proprietary ECU daemon binaries in this fork. Independent
   integration publishers should target the documented PowerTune UDP

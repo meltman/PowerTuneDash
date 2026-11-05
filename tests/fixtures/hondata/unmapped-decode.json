@@ -1,0 +1,12 @@
+{
+  "name": "unmapped-decode-cost",
+  "workload_class": "P1",
+  "duration_seconds": 10,
+  "tick_ms": 50,
+  "can_bitrate": 500000,
+  "profile": "hondata-motec",
+  "frame_rate_hz": 20,
+  "signals": {
+    "knock_count": {"type": "triangle", "minimum": 0, "maximum": 20, "period_seconds": 2}
+  }
+}
