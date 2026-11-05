@@ -33,6 +33,13 @@ PtProfile::PtProfile(QObject *parent)
     : QObject(parent)
 {
     s_enabled.store(parseEnabled(qgetenv("PT_PROFILE")), std::memory_order_relaxed);
+    const bool both = parseEnabled(qgetenv("PT_PROFILE_DISABLE_BOTH"));
+    m_disableNeedletrail = both || parseEnabled(qgetenv("PT_PROFILE_DISABLE_NEEDLETRAIL"));
+    m_disableDynamicTickColors = both || parseEnabled(qgetenv("PT_PROFILE_DISABLE_DYNAMIC_TICK_COLORS"));
+    if (m_disableNeedletrail || m_disableDynamicTickColors)
+        qWarning().noquote()
+            << QStringLiteral("WARN PowerTune diagnostic switches active: disable_needletrail=%1 disable_dynamic_tick_colors=%2 (not for production)")
+                   .arg(m_disableNeedletrail).arg(m_disableDynamicTickColors);
     bool ok = false;
     const int interval = qEnvironmentVariableIntValue("PT_PROFILE_INTERVAL_MS", &ok);
     if (ok && interval >= 1000 && interval <= 60000)
@@ -59,6 +66,13 @@ void PtProfile::addTimeUs(const QString &name, qint64 microseconds)
     if (!enabled())
         return;
     bump(name, 1, microseconds > 0 ? quint64(microseconds) : 0);
+}
+
+bool PtProfile::countTrue(const QString &name)
+{
+    if (enabled())
+        bump(name, 1, 0);
+    return true;
 }
 
 qint64 PtProfile::nowUs() const

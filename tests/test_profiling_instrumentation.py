@@ -56,7 +56,7 @@ class ProfilingInstrumentationTests(unittest.TestCase):
         # setMAP still emits unconditionally; this pass is diagnostic only.
         body = dash.split("void DashBoard::setMAP(const qreal &MAP)")[1].split("}\n\nvoid")[0]
         self.assertNotIn("m_MAP == MAP", body)
-        self.assertIn("onValueChanged: {\n                        if (PTProfile.enabled)",
+        self.assertIn("onValueChanged: {\n                        if (PTProfile.disableNeedletrail)",
                       read("Gauges/RoundGauge.qml").replace("\r\n", "\n"))
 
     def test_documentation_records_measurements(self):
@@ -70,6 +70,24 @@ class ProfilingInstrumentationTests(unittest.TestCase):
             self.assertIn(heading, doc)
         for term in ("HIVE", "WASP", "NextGen"):
             self.assertNotIn(term, doc)
+
+    def test_diagnostic_switches_default_off_and_documented(self):
+        src = read("ptprofile.cpp")
+        for var in ("PT_PROFILE_DISABLE_NEEDLETRAIL",
+                    "PT_PROFILE_DISABLE_DYNAMIC_TICK_COLORS",
+                    "PT_PROFILE_DISABLE_BOTH"):
+            self.assertIn(var, src)
+            self.assertIn(var, read("docs/PERFORMANCE_PROFILING.md"))
+        header = read("ptprofile.h")
+        self.assertIn("m_disableNeedletrail = false", header)
+        self.assertIn("m_disableDynamicTickColors = false", header)
+        gauge = read("Gauges/RoundGauge.qml").replace("\r\n", "\n")
+        self.assertIn("PTProfile.disableNeedletrail", gauge)
+        self.assertEqual(gauge.count("PTProfile.disableDynamicTickColors ?"), 3)
+        for name in ("majortick", "minortick", "label"):
+            self.assertIn(f"gauge.colorEval.{name}", gauge)
+        self.assertIn("gauge.needletrail.suppressed", gauge)
+        self.assertIn("requestPaint()", gauge)
 
 
 if __name__ == "__main__":

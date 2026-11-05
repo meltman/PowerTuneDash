@@ -275,3 +275,80 @@ Smallest first Device 0 A/B candidate: with profiling data in hand, run P4
 direct with the `needletrail` repaint disabled behind a temporary local build
 flag (diagnostic only, not for release) to isolate the Canvas share of the
 12.4-point increase before designing any appearance-preserving replacement.
+
+## Diagnostic A/B switches (Canvas vs tick/label bindings)
+
+### Device 0 evidence that motivated the switches
+
+Build `PowerTune i.MX8 Appliance 2026.11.05`, revision `6662850`, canonical
+dashboard SHA-256 `6f227adba4e1ee11c1c55d48e0ef17fd5b585fe79d508e3057561239ad25ae7a`,
+matched direct-UDP P4. Instrumented full active intervals:
+
+| Metric | Interval 1 | Interval 2 |
+|--------|-----------|-----------|
+| process CPU | 22.4% | 18.0% |
+| GUI thread | 16.2% | 13.2% |
+| QSGRenderThread | 6.0% | 4.8% |
+
+Per interval: 139 UDP records, 139 visible gauge changes, 139 needletrail
+requests and paints, 71 scene renders and swaps, 142 frame syncs. Measured
+`needletrail.onPaint` callback time: 78 paints at 420 us and 61 at 438 us, about
+59.5 ms per 10 s (about 0.6% of one core). The Canvas JavaScript body alone
+therefore does not explain the roughly 12-point P0 to P4 increase. Remaining
+candidates: Canvas texture invalidation/upload and scene-graph work (not in
+`onPaint`), and tick/label binding fan-out. These switches separate them.
+
+### Switches (environment, default off, diagnostic only)
+
+| Variable | Effect |
+|----------|--------|
+| `PT_PROFILE_DISABLE_NEEDLETRAIL=1` | `needletrail` skips `requestPaint()` on value change. Gauge values, needle, ticks, labels and telemetry are unchanged. The trail keeps whatever it last painted (initial paint only). |
+| `PT_PROFILE_DISABLE_DYNAMIC_TICK_COLORS=1` | tick, minor-tick and label colour bindings no longer depend on `gauge.value`, so they are not re-evaluated on value change; they stay at their inactive colour. Needletrail and needle motion are unchanged. |
+| `PT_PROFILE_DISABLE_BOTH=1` | both of the above (or set the two switches together). |
+
+The switches work without `PT_PROFILE=1`, but use `PT_PROFILE=1` to see counters.
+When any switch is active a `WARN PowerTune diagnostic switches active` line is
+logged. They do not touch UDP handling, Dashboard setters, update rate,
+interpolation, geometry, dashboard serialization or the number of QML
+components; appearance differs only as described (trail not redrawn, ticks and
+labels shown inactive). Never enable them in production images.
+
+### Added counters (with `PT_PROFILE=1`)
+
+- `gauge.valueChanged.<name>` - gauge value change
+- `gauge.needletrail.requestPaint` - Canvas request issued
+- `gauge.needletrail.suppressed` - request skipped by the switch
+- `gauge.needletrail.onPaint` - Canvas callback (count, `avg_us`)
+- `frame.render`, `frame.swapped`, `frame.sync` - scene render, swap, sync
+- `gauge.colorEval.majortick`, `.minortick`, `.label` - dynamic colour
+  evaluations (aggregate counts; each is an extra C++ call per evaluation, so
+  compare instrumented runs with instrumented runs only)
+
+### A/B procedure
+
+Same build, same dashboard SHA, same P4 direct-UDP workload, same duration, a
+fresh PowerTune start for each case, profiling on:
+
+| Case | Environment |
+|------|-------------|
+| A normal | `PT_PROFILE=1` |
+| B needletrail disabled | `PT_PROFILE=1 PT_PROFILE_DISABLE_NEEDLETRAIL=1` |
+| C dynamic colours disabled | `PT_PROFILE=1 PT_PROFILE_DISABLE_DYNAMIC_TICK_COLORS=1` |
+| D both disabled | `PT_PROFILE=1 PT_PROFILE_DISABLE_BOTH=1` |
+
+Record process CPU, GUI-thread and QSGRenderThread CPU, and the counters for
+full active intervals; also run the external `pt-profile-workload.sh` CPU
+sampling. Repeat each case at least twice.
+
+### Interpretation
+
+- B clearly lowers GUI/render CPU despite the small `onPaint` time: Canvas
+  texture invalidation/upload and re-render is expensive.
+- C clearly lowers CPU: tick/label binding fan-out is expensive
+  (`gauge.colorEval.*` counts show the evaluation volume).
+- D substantially better than either alone: both paths contribute.
+- None materially reduces CPU: investigate needle/transform scene-graph
+  updates and frame scheduling (`frame.sync` is about twice `frame.render`
+  above, so look at why syncs occur without renders).
+
+No production optimization is made until this matrix is measured.

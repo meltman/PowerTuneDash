@@ -24,12 +24,21 @@ class PtProfile : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool enabled READ isEnabled CONSTANT)
+    // Diagnostic A/B switches (default off), read once from the environment:
+    //   PT_PROFILE_DISABLE_NEEDLETRAIL=1          no needletrail requestPaint()
+    //   PT_PROFILE_DISABLE_DYNAMIC_TICK_COLORS=1  tick/minor/label colours not
+    //                                             re-evaluated on value change
+    //   PT_PROFILE_DISABLE_BOTH=1                 both of the above
+    Q_PROPERTY(bool disableNeedletrail READ disableNeedletrail CONSTANT)
+    Q_PROPERTY(bool disableDynamicTickColors READ disableDynamicTickColors CONSTANT)
 
 public:
     static PtProfile *instance();
     static bool enabled() { return s_enabled.load(std::memory_order_relaxed); }
 
     bool isEnabled() const { return enabled(); }
+    bool disableNeedletrail() const { return m_disableNeedletrail; }
+    bool disableDynamicTickColors() const { return m_disableDynamicTickColors; }
 
     // Observe window frame signals and report the Dashboard signal fan-out.
     void attach(QQuickWindow *window, DashBoard *dashboard);
@@ -37,6 +46,9 @@ public:
     Q_INVOKABLE void count(const QString &name);
     Q_INVOKABLE void addTimeUs(const QString &name, qint64 microseconds);
     Q_INVOKABLE qint64 nowUs() const;
+    // Counts one evaluation and returns true, so it can sit inside a binding
+    // without changing the binding's result.
+    Q_INVOKABLE bool countTrue(const QString &name);
 
     // Parses a PT_PROFILE value; exposed for static verification.
     static bool parseEnabled(const QByteArray &value);
@@ -63,6 +75,8 @@ private:
     QTimer *m_timer = nullptr;
     DashBoard *m_dashboard = nullptr;
     bool m_fanOutReported = false;
+    bool m_disableNeedletrail = false;
+    bool m_disableDynamicTickColors = false;
 };
 
 #define PT_PROFILE_COUNT(name) \

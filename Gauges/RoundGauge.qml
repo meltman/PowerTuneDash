@@ -324,8 +324,12 @@ Rectangle{
 
                     anchors.fill: parent
                     onValueChanged: {
-                        if (PTProfile.enabled) { PTProfile.count("gauge.needletrail.requestPaint") }
-                        requestPaint()
+                        if (PTProfile.disableNeedletrail) {
+                            if (PTProfile.enabled) { PTProfile.count("gauge.needletrail.suppressed") }
+                        } else {
+                            if (PTProfile.enabled) { PTProfile.count("gauge.needletrail.requestPaint") }
+                            requestPaint()
+                        }
                     }
 
                     function degreesToRadians(degrees) {
@@ -367,7 +371,7 @@ Rectangle{
                 text: styleData.value / divider
                 font.bold: true
                 font.family: labelfont
-                color: styleData.value <= gauge.value ? labelcoloractive : labelcolorinactive
+                color: PTProfile.disableDynamicTickColors ? labelcolorinactive : ((PTProfile.enabled ? PTProfile.countTrue("gauge.colorEval.label") : true) && styleData.value <= gauge.value ? labelcoloractive : labelcolorinactive)
                 antialiasing: true
                 Component.onCompleted: { if (PTProfile.enabled) { PTProfile.count("gauge.delegates.label") } }
             }
@@ -377,7 +381,7 @@ Rectangle{
                 implicitHeight: toPixels(minortickmarkheight *0.01)
                 antialiasing: true
                 smooth: true
-                color: styleData.value <= gauge.value ? minortickmarkcoloractive : minortickmarkcolorinactive
+                color: PTProfile.disableDynamicTickColors ? minortickmarkcolorinactive : ((PTProfile.enabled ? PTProfile.countTrue("gauge.colorEval.minortick") : true) && styleData.value <= gauge.value ? minortickmarkcoloractive : minortickmarkcolorinactive)
                 Component.onCompleted: { if (PTProfile.enabled) { PTProfile.count("gauge.delegates.minortick") } }
 
             }
@@ -387,7 +391,7 @@ Rectangle{
                 implicitHeight: toPixels(tickmarkheight *0.01)
                 antialiasing: true
                 smooth: true
-                color: styleData.value <= gauge.value ? majortickmarkcoloractive : majortickmarkcolorinactive
+                color: PTProfile.disableDynamicTickColors ? majortickmarkcolorinactive : ((PTProfile.enabled ? PTProfile.countTrue("gauge.colorEval.majortick") : true) && styleData.value <= gauge.value ? majortickmarkcoloractive : majortickmarkcolorinactive)
                 Component.onCompleted: { if (PTProfile.enabled) { PTProfile.count("gauge.delegates.majortick") } }
             }
         }
