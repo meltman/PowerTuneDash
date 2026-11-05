@@ -188,6 +188,26 @@ python3 tools/kpro-powertune-bridge.py \
   --replay /tmp/acceleration-workload.candump --replay-speed 0 --summary
 ```
 
+Generate direct-UDP controls from the mapped, decoder-produced values and
+timestamps in the source K-Pro scenarios. These generated event fixtures are
+derived outputs; do not maintain a second hand-authored signal trajectory:
+
+```sh
+python3 tools/kpro-workload.py udp-control \
+  --scenario tests/fixtures/hondata/slow-change.json \
+  --output tests/fixtures/udp/direct-p3-profile-control.json
+python3 tools/kpro-workload.py udp-control \
+  --scenario tests/fixtures/hondata/acceleration-workload.json \
+  --output tests/fixtures/udp/direct-p4-acceleration-control.json
+python3 tools/powertune-udp-sim.py \
+  --scenario tests/fixtures/udp/direct-p3-profile-control.json
+```
+
+Timed direct controls retain the source scenario duration and emit each
+PowerTune identifier/value event at its absolute scenario offset. Equivalence
+tests ensure the generated controls match the decoder/publisher values and
+publication timing.
+
 Explicitly transmit over the Waveshare adapter (this sends physical CAN;
 requires an authorized, terminated bench and is not part of static tests):
 

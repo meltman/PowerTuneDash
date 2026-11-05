@@ -16,6 +16,7 @@ MIN_INTERVAL_MS = 10
 MAX_INTERVAL_MS = 60_000
 MAX_SCENARIO_SIGNALS = 64
 MAX_SCENARIO_VALUES = 10_000
+MAX_SCENARIO_EVENTS = 100_000
 MAX_SWEEP_VALUES = 10_000
 MAX_VALUE_CHARS = 64
 
@@ -144,6 +145,57 @@ def load_scenario(path):
     return interval_ms, records
 
 
+def load_timed_scenario(path):
+    try:
+        with Path(path).open(encoding="utf-8") as scenario_file:
+            scenario = json.load(scenario_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read scenario: {exc}") from exc
+    if not isinstance(scenario, dict) or scenario.get("format") != "powertune-udp-events-v1":
+        return None
+
+    duration_ms = scenario.get("duration_ms")
+    if isinstance(duration_ms, bool) or not isinstance(duration_ms, int) or duration_ms <= 0:
+        raise ValueError("timed scenario duration_ms must be a positive integer")
+    events = scenario.get("events")
+    if not isinstance(events, list) or not events:
+        raise ValueError("timed scenario events must be a non-empty list")
+    if len(events) > MAX_SCENARIO_EVENTS:
+        raise ValueError(f"timed scenario may contain at most {MAX_SCENARIO_EVENTS} events")
+
+    parsed = []
+    previous_time = None
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            raise ValueError(f"timed scenario event {index} must be an object")
+        try:
+            at_ms = numeric_decimal(event["at_ms"])
+            identifier = parse_identifier(str(event["identifier"]))
+            value = numeric_text(event["value"])
+        except (KeyError, ValueError, argparse.ArgumentTypeError) as exc:
+            raise ValueError(f"invalid timed scenario event {index}: {exc}") from exc
+        if at_ms < 0 or at_ms > duration_ms:
+            raise ValueError(f"timed scenario event {index} is outside duration_ms")
+        if previous_time is not None and at_ms < previous_time:
+            raise ValueError("timed scenario events must be ordered by at_ms")
+        previous_time = at_ms
+        parsed.append((at_ms, identifier, value))
+    return duration_ms, parsed
+
+
+def send_timed_events(sock, duration_ms, events, clock=time.monotonic, sleep=time.sleep):
+    started = clock()
+    for at_ms, identifier, value in events:
+        target = started + float(at_ms / 1000)
+        delay = target - clock()
+        if delay > 0:
+            sleep(delay)
+        announce_and_send(sock, identifier, value, f"identifier {identifier}")
+    remaining = started + duration_ms / 1000 - clock()
+    if remaining > 0:
+        sleep(remaining)
+
+
 def validate_interval(interval_ms):
     if not MIN_INTERVAL_MS <= interval_ms <= MAX_INTERVAL_MS:
         raise ValueError(
@@ -227,6 +279,11 @@ def run(argv=None):
     args = parse_args(argv)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         if args.scenario:
+            timed_scenario = load_timed_scenario(args.scenario)
+            if timed_scenario is not None:
+                duration_ms, events = timed_scenario
+                send_timed_events(sock, duration_ms, events)
+                return
             interval_ms, signals = load_scenario(args.scenario)
             delay = interval_ms / 1000
             for index in range(max(len(values) for _, _, values in signals)):

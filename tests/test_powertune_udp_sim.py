@@ -118,6 +118,60 @@ class UdpSimulatorTests(unittest.TestCase):
             ],
         )
 
+    def test_timed_event_scenario_sends_at_absolute_offsets_and_runs_duration(self):
+        data = {
+            "format": "powertune-udp-events-v1",
+            "duration_ms": 100,
+            "events": [
+                {"at_ms": 0, "identifier": 179, "value": "800"},
+                {"at_ms": 20, "identifier": 179, "value": "900"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "timed.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            duration_ms, events = SIM.load_timed_scenario(path)
+        self.assertEqual(duration_ms, 100)
+
+        now = [0.0]
+        sleeps = []
+
+        def sleep(delay):
+            sleeps.append(delay)
+            now[0] += delay
+
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+
+            def sendto(self, payload, address):
+                self.sent.append((payload, address, now[0]))
+
+        sock = FakeSocket()
+        with redirect_stdout(StringIO()):
+            SIM.send_timed_events(sock, duration_ms, events, lambda: now[0], sleep)
+        self.assertEqual(
+            [(payload, timestamp) for payload, _address, timestamp in sock.sent],
+            [(b"179,800", 0.0), (b"179,900", 0.02)],
+        )
+        self.assertAlmostEqual(now[0], 0.1)
+        self.assertEqual(sleeps, [0.02, 0.08])
+
+    def test_timed_scenario_rejects_out_of_order_events(self):
+        data = {
+            "format": "powertune-udp-events-v1",
+            "duration_ms": 100,
+            "events": [
+                {"at_ms": 20, "identifier": 179, "value": "800"},
+                {"at_ms": 10, "identifier": 179, "value": "900"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "timed.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "ordered"):
+                SIM.load_timed_scenario(path)
+
     def test_default_destination_is_localhost(self):
         args = SIM.parse_args(["--id", "179", "--value", "800"])
         self.assertEqual(

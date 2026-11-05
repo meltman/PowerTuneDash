@@ -14,6 +14,7 @@ sys.path.insert(0, str(TOOLS))
 
 import kpro_can
 import kpro_workload
+from powertune_udp import PowerTunePublisher
 
 USB_CAN_SPEC = importlib.util.spec_from_file_location(
     "pt_usb_can_workload_test", TOOLS / "pt-usb-can.py"
@@ -125,6 +126,22 @@ class ScenarioTests(unittest.TestCase):
         )
         slower = list(kpro_workload.iter_scheduled_frames(scenario, frame_rate_hz=5))
         self.assertEqual(len(slower), 50)
+
+    def test_paced_replay_runs_for_full_scenario_duration(self):
+        scenario = kpro_workload.validate_scenario(base_660())
+        now = [0.0]
+
+        def sleep(delay):
+            now[0] += delay
+
+        workload_cli.replay_scenario(
+            scenario,
+            send_udp=False,
+            speed=1,
+            sleep=sleep,
+            clock=lambda: now[0],
+        )
+        self.assertAlmostEqual(now[0], float(scenario.duration))
 
     def test_synthetic_frames_are_independent_of_can_bitrate(self):
         bench = base_660()
@@ -267,7 +284,7 @@ class ScenarioTests(unittest.TestCase):
         rpm_values = [record for record in noisy_records if record.startswith(b"179,")]
         self.assertEqual(rpm_values, [b"179,800", b"179,820"])
 
-    def test_matched_direct_udp_and_can_rpm_change_sequence(self):
+    def test_rpm_change_smoke_scenario_publishes_expected_sequence(self):
         scenario = load_scenario("direct-rpm-change.json")
         _, records = workload_cli.replay_scenario(
             scenario, send_udp=False, capture_packets=True
@@ -277,16 +294,48 @@ class ScenarioTests(unittest.TestCase):
             [b"179,1800", b"179,1900", b"179,2000", b"179,2100", b"179,2200"],
         )
         self.assertEqual(len(list(kpro_workload.iter_scheduled_frames(scenario))), 10)
-        direct = json.loads(
-            (ROOT / "tests/fixtures/udp/direct-p3-rpm-control.json").read_text(
-                encoding="utf-8"
-            )
+
+    def test_direct_p3_and_p4_controls_match_kpro_publication_sequence_and_timing(self):
+        controls = (
+            ("slow-change.json", "direct-p3-profile-control.json", "P3"),
+            ("acceleration-workload.json", "direct-p4-acceleration-control.json", "P4"),
         )
-        self.assertEqual(direct["interval_ms"], 200)
-        self.assertEqual(
-            direct["signals"]["rpm"],
-            [1800, 1900, 2000, 2100, 2200],
-        )
+        for scenario_name, control_name, workload_class in controls:
+            with self.subTest(scenario=scenario_name):
+                scenario = load_scenario(scenario_name)
+                control_path = ROOT / "tests/fixtures/udp" / control_name
+                control = json.loads(control_path.read_text(encoding="utf-8"))
+                expected_events = []
+                current_time = 0
+                publisher = PowerTunePublisher(
+                    lambda packet, _destination: expected_events.append(
+                        (current_time, packet.decode("ascii"))
+                    ),
+                    epsilon=scenario.publication_epsilon,
+                )
+                for frame in kpro_workload.iter_scheduled_frames(scenario):
+                    current_time = int(Decimal(str(frame.timestamp or 0)) * 1000)
+                    for signal in kpro_can.decode_frame(frame, scenario.profile):
+                        publisher.publish(signal)
+
+                actual_events = [
+                    (event["at_ms"], f'{event["identifier"]},{event["value"]}')
+                    for event in control["events"]
+                ]
+                self.assertEqual(control["workload_class"], workload_class)
+                self.assertEqual(control["source_scenario"], scenario_name)
+                self.assertEqual(control["duration_ms"], int(scenario.duration * 1000))
+                self.assertEqual(actual_events, expected_events)
+
+                with tempfile.TemporaryDirectory() as directory:
+                    generated = Path(directory) / control_name
+                    kpro_workload.export_udp_control(
+                        scenario, generated, scenario_name
+                    )
+                    self.assertEqual(
+                        json.loads(generated.read_text(encoding="utf-8")),
+                        control,
+                    )
 
     def test_stale_frame_schedule_transitions_selected_signals(self):
         scenario = load_scenario("stale-data.json")

@@ -53,8 +53,10 @@ For a direct UDP control path, compare a mapped workload replay with
 
 ```sh
 python3 tools/powertune-udp-sim.py --scenario tests/fixtures/udp/direct-p2-control.json
-python3 tools/powertune-udp-sim.py --scenario tests/fixtures/udp/direct-p3-rpm-control.json
-python3 tools/kpro-workload.py replay --scenario tests/fixtures/hondata/direct-rpm-change.json --summary
+python3 tools/kpro-workload.py replay --scenario tests/fixtures/hondata/slow-change.json --speed 1 --summary
+python3 tools/powertune-udp-sim.py --scenario tests/fixtures/udp/direct-p3-profile-control.json
+python3 tools/kpro-workload.py replay --scenario tests/fixtures/hondata/acceleration-workload.json --speed 1 --summary
+python3 tools/powertune-udp-sim.py --scenario tests/fixtures/udp/direct-p4-acceleration-control.json
 ```
 
 The paired paths are:
@@ -67,11 +69,29 @@ direct pt-udp-sim -----------------------> PowerTune UDP -> PowerTune
 This comparison helps separate physical CAN/Waveshare, SocketCAN receive,
 decoder, UDP publisher, and PowerTune costs. Software replay has no physical
 Waveshare or CAN-bus cost. The P2 direct fixture sends the same one-time
-values as `steady-cruise.json`. The matched P3 pair uses the direct fixture's five RPM values 1800 through
-2200 at 200 ms intervals and the CAN fixture, which evaluates the same five
-values while emitting ten identical/repeated frames at 10 Hz; compare the
-five UDP publications and their timing. Do not compare
-unlike frame rates or durations. A one-shot direct sanity check is also:
+values as `steady-cruise.json`. The P3 and P4 direct controls are generated
+from the mapped trajectories in `slow-change.json` and
+`acceleration-workload.json`, respectively. They contain the same PowerTune
+identifier/value events at the source frame timestamps and run for the same
+scenario duration. Regenerate, rather than hand-edit, them with:
+
+```sh
+python3 tools/kpro-workload.py udp-control \
+  --scenario tests/fixtures/hondata/slow-change.json \
+  --output tests/fixtures/udp/direct-p3-profile-control.json
+python3 tools/kpro-workload.py udp-control \
+  --scenario tests/fixtures/hondata/acceleration-workload.json \
+  --output tests/fixtures/udp/direct-p4-acceleration-control.json
+```
+
+Run each case separately with the same PowerTune state and sample duration.
+`--speed 1` preserves the K-Pro scenario's frame/publication cadence; direct
+event controls use their absolute offsets and preserve the full scenario
+duration. Tests compare generated direct event sequences and timestamps
+against the corresponding K-Pro decoder/publisher trajectories. The former
+one-second `direct-p3-rpm-control.json` was removed; it duplicated a
+hand-authored trajectory and was not a profiling-matched control. A one-shot
+direct sanity check is also:
 
 ```sh
 pt-udp-sim --signal rpm --value 2500

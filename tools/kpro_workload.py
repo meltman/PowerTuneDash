@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import json
 import math
 from typing import Dict, Iterable, Mapping, Optional
 
-from kpro_can import PROFILES, CanFrame, encode_signals
-from powertune_udp import POWER_TUNE_IDS
+from kpro_can import PROFILES, CanFrame, decode_frame, encode_signals
+from powertune_udp import POWER_TUNE_IDS, PowerTunePublisher
 
 
 WORKLOAD_CLASSES = {
@@ -392,6 +393,39 @@ def iter_scheduled_frames(scenario, frame_rate_hz=None):
             frame.can_id, frame.data, frame.extended, frame.remote, float(seconds)
         )
         yield frame
+
+
+def export_udp_control(scenario, output, source_scenario, frame_rate_hz=None):
+    """Write direct UDP events matching the scenario's published output."""
+    scenario = scenario if isinstance(scenario, Scenario) else validate_scenario(scenario)
+    events = []
+    publisher = PowerTunePublisher(lambda *_args: None, epsilon=scenario.publication_epsilon)
+    for frame in iter_scheduled_frames(scenario, frame_rate_hz):
+        timestamp = Decimal(str(frame.timestamp or 0)) * 1000
+        at_ms = int(timestamp) if timestamp == timestamp.to_integral_value() else float(timestamp)
+        for signal in decode_frame(frame, scenario.profile):
+            packet = publisher.publish(signal)
+            if packet is None:
+                continue
+            identifier, value = packet.decode("ascii").split(",", 1)
+            events.append({
+                "at_ms": at_ms,
+                "identifier": int(identifier),
+                "value": value,
+            })
+
+    fixture = {
+        "format": "powertune-udp-events-v1",
+        "name": f"{scenario.name}-direct-udp-control",
+        "source_scenario": source_scenario,
+        "workload_class": scenario.workload_class,
+        "duration_ms": int(scenario.duration * 1000),
+        "events": events,
+    }
+    with open(output, "w", encoding="utf-8", newline="\n") as file:
+        json.dump(fixture, file, indent=2)
+        file.write("\n")
+    return len(events)
 
 
 def scenario_summary(scenario, frame_rate_hz=None):

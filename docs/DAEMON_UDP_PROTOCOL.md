@@ -497,6 +497,16 @@ Run it explicitly with:
 python3 tools/powertune-udp-sim.py --scenario bench.json
 ```
 
+For timing-matched direct controls, the simulator also accepts generated
+`powertune-udp-events-v1` fixtures with a `duration_ms` and ordered `events`
+containing `at_ms`, `identifier`, and `value`. Events use absolute offsets from
+scenario start; records sharing an offset are sent back-to-back, and the
+simulator remains active through the declared duration. Generate these
+fixtures from the synthetic K-Pro scenarios with `tools/kpro-workload.py
+udp-control` rather than hand-authoring duplicate trajectories. The P3/P4
+profiling controls and regeneration commands are documented in
+[`PERFORMANCE_PROFILING.md`](PERFORMANCE_PROFILING.md).
+
 ## Integration boundary and receiver lifecycle
 
 The PowerTune visual runtime consumes normalized values; it does not require

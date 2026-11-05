@@ -17,6 +17,7 @@ from kpro_workload import (
     MAX_FRAME_RATE_HZ,
     MAX_GENERATED_FRAMES,
     ScenarioError,
+    export_udp_control,
     iter_scheduled_frames,
     scenario_summary,
     validate_scenario,
@@ -170,6 +171,13 @@ def replay_scenario(
                         f"{virtual_time:9.3f}s CAN 0x{frame.can_id:03X} "
                         f"{signal.name}={signal.value} {signal.unit}"
                     )
+        if previous_virtual_time is not None:
+            _sleep_for_schedule(
+                previous_virtual_time,
+                float(scenario.duration),
+                speed,
+                sleep,
+            )
         stale = tracker.mark_stale(float(scenario.duration), stale_after)
         metrics.stale_transitions += len(stale)
         if diagnostic:
@@ -291,6 +299,16 @@ def make_parser():
     export.add_argument("--interface", default="synthetic")
     export.add_argument("--frame-rate-hz", type=int)
 
+    udp_control = subparsers.add_parser(
+        "udp-control", help="generate direct UDP events from mapped scenario output"
+    )
+    _add_scenario_argument(udp_control)
+    udp_control.add_argument("--output", required=True)
+    udp_control.add_argument(
+        "--source-name", help="source scenario path recorded in the generated fixture"
+    )
+    udp_control.add_argument("--frame-rate-hz", type=int)
+
     return parser
 
 
@@ -314,6 +332,13 @@ def run(argv=None):
             scenario, args.output, args.interface, frame_rate
         )
         print(f"Exported {count} frames to {args.output}")
+        return 0
+    if args.command == "udp-control":
+        source_name = args.source_name or Path(args.scenario).name
+        count = export_udp_control(
+            scenario, args.output, source_name, frame_rate
+        )
+        print(f"Generated {count} timed UDP events in {args.output}")
         return 0
     if args.command == "replay":
         metrics, _ = replay_scenario(
