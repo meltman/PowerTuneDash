@@ -8,6 +8,7 @@
 
 #include "calculations.h"
 #include "dashboard.h"
+#include "ptprofile.h"
 #include <QDebug>
 
 qreal Power;
@@ -158,6 +159,7 @@ void calculations::saveodoandtriptofile()
 // 330 Feet  = 0,0624987 miles = 0,10058191 km
 void calculations::calculate()
 {
+    PT_PROFILE_COUNT("timer.calculations.25ms");
 
     weight = m_dashboard->Weight();
     //qDebug() << "Weight" << weight;

@@ -1,4 +1,8 @@
 #include "dashboard.h"
+#include "ptprofile.h"
+#include <QMetaObject>
+#include <QMetaMethod>
+#include <QMetaProperty>
 #include <QStringList>
 #include <QDebug>
 #include <QVector>
@@ -971,6 +975,7 @@ void DashBoard::setSteinhartcalc(const qreal &T01,const qreal &T02,const qreal &
 // Advanced Info FD3S
 void DashBoard::setrpm(const qreal &rpm)
 {
+    PT_PROFILE_COUNT("dash.rpm.setter");
     if (m_rpm == rpm)
         return;
     if (m_DI1RPMEnabled == 0)
@@ -990,7 +995,8 @@ void DashBoard::setrpm(const qreal &rpm)
         for (int i = 0; i <= m_smoothrpm-1; i++){avgrpm+= averageRPM[i];}
         m_rpm = avgrpm/m_smoothrpm;
     }
-        emit rpmChanged(rpm);
+        PT_PROFILE_COUNT("dash.rpm.emit");
+    emit rpmChanged(rpm);
     }
 
 }
@@ -1122,6 +1128,7 @@ void DashBoard::setBoostwg(const qreal &Boostwg)
 
 void DashBoard::setWatertemp(const qreal &Watertemp)
 {
+    PT_PROFILE_COUNT("dash.Watertemp.setter");
     if (m_Watertemp == Watertemp)
         return;
     if (m_units == "metric")
@@ -1129,6 +1136,7 @@ void DashBoard::setWatertemp(const qreal &Watertemp)
     if (m_units == "imperial")
     {m_Watertemp = Watertemp * 1.8 + 32;}
 
+    PT_PROFILE_COUNT("dash.Watertemp.emit");
     emit watertempChanged(Watertemp);
 }
 
@@ -1161,6 +1169,7 @@ void DashBoard::setBatteryV(const qreal &BatteryV)
 void DashBoard::setSpeed(const qreal &speed)
 {
     //qDebug()<< "SPEED" << m_speed;
+    PT_PROFILE_COUNT("dash.speed.setter");
     if (m_speed == speed)
         return;
     if (m_speedunits == "metric")
@@ -1185,6 +1194,7 @@ void DashBoard::setSpeed(const qreal &speed)
         // qDebug() << "Average Speed " << m_speed;
     }
 if (m_ExternalSpeed == 0){
+    PT_PROFILE_COUNT("dash.speed.emit");
     emit speedChanged(m_speed);
     }
 }
@@ -2146,10 +2156,12 @@ void DashBoard::setengineprotectionreason (const QString &engineprotectionreason
 
 void DashBoard::setMAP(const qreal &MAP)
 {
+    PT_PROFILE_COUNT("dash.MAP.setter");
     if (m_pressureunits == "metric")
     { m_MAP = MAP;}
     if (m_pressureunits == "imperial")
     {m_MAP = MAP * 0.145038;}
+    PT_PROFILE_COUNT("dash.MAP.emit");
     emit mAPChanged(MAP);
 }
 
@@ -2375,10 +2387,29 @@ void DashBoard::setAFRcyl8(const qreal &AFRcyl8)
 
 void DashBoard::setTPS(const qreal &TPS)
 {
+    PT_PROFILE_COUNT("dash.TPS.setter");
     if (m_TPS == TPS)
         return;
     m_TPS = TPS;
+    PT_PROFILE_COUNT("dash.TPS.emit");
     emit tPSChanged(TPS);
+}
+
+QVariantMap DashBoard::profileFanOut(const QStringList &properties) const
+{
+    QVariantMap result;
+    for (const QString &name : properties) {
+        const int index = metaObject()->indexOfProperty(name.toLatin1().constData());
+        if (index < 0) {
+            result.insert(name, QStringLiteral("missing"));
+            continue;
+        }
+        const QMetaMethod notify = metaObject()->property(index).notifySignal();
+        result.insert(name, notify.isValid()
+            ? receivers(QByteArray("2") + notify.methodSignature())
+            : 0);
+    }
+    return result;
 }
 
 void DashBoard::setIdleValue(const qreal &IdleValue)

@@ -1,4 +1,5 @@
 #include "networkmanagerclient.h"
+#include "ptprofile.h"
 
 #include <QDBusMessage>
 #include <QDBusMetaType>
@@ -393,6 +394,7 @@ void NetworkManagerClient::scheduleRefresh()
 
 void NetworkManagerClient::refreshDevices()
 {
+    PT_PROFILE_COUNT("timer.networkmanager.refresh");
     if (!m_managerAvailable)
         return;
 

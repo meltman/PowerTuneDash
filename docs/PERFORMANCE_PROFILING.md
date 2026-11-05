@@ -135,3 +135,143 @@ device selection when discovery is ambiguous. It must not be used on a
 connected ECU or vehicle as part of these performance comparisons. This
 change does not run physical transmission, alter CAN settings, or validate
 actual K-Pro timing.
+
+## Changing-value CPU investigation (P0/P2/P3/P4)
+
+This section records measured evidence, then source-trace inference, then
+hypotheses. Only the first is established fact.
+
+### Measured evidence (Device 0)
+
+Canonical benchmark dashboard, SHA-256
+`6f227adba4e1ee11c1c55d48e0ef17fd5b585fe79d508e3057561239ad25ae7a`
+(`performance-reference-v1.txt`; five round gauges: RPM, Speed, ECT, TPS, MAP).
+
+| Phase | Workload | PowerTune CPU |
+|-------|----------|---------------|
+| P0 | no telemetry | 8.53% |
+| P2 | constant realtime telemetry | 8.57% |
+| P3 | K-Pro path, RPM changing | 13.70% |
+| P3 | matched direct UDP | 14.20% |
+| P4 | K-Pro path, acceleration | 20.80% |
+| P4 | matched direct UDP | 21.00% |
+
+Conclusions the data supports: unchanged continuous telemetry costs about the
+same as idle; the K-Pro/CAN path adds negligible PowerTune-side cost versus
+direct UDP; the cost appears when displayed property values change.
+
+### Source trace (static reading, not yet measured)
+
+1. `udpreceiver::processPendingDatagrams()` builds a `QString` per datagram,
+   splits on `,`, then dispatches via a large `switch` (identifiers 179 RPM,
+   199 speed, 221 ECT, 210 TPS, 155 MAP).
+2. `DashBoard::setrpm / setSpeed / setWatertemp / setTPS / setMAP` update the
+   value and emit the property's NOTIFY signal. All but `setMAP` return early
+   when the value is unchanged; `setMAP` emits unconditionally (affects MAP
+   only, and the UDP records for MAP are the same count as the other gauges in
+   the P4 fixture).
+3. `RoundGauge.qml` rebinds `gauge.value` to `Dashboard[mainvaluename]` after
+   its intro animation. Each integer-or-fractional change of `gauge.value`
+   causes:
+   - `CircularGauge.onValueChanged` -> `warn()` (colour/boolean property
+     updates; no signal on identical assignment);
+   - `needletrail` (a full-gauge `Canvas`, `onValueChanged: requestPaint()`):
+     software 2D repaint using a four-stop radial gradient and a wide arc
+     stroke, then a texture upload; it repaints when the integer part of the
+     value changes;
+   - re-evaluation of every tick, minor-tick and label delegate colour binding
+     (`styleData.value <= gauge.value ? active : inactive`).
+4. Other `Dashboard` signal consumers: `Settings/main.qml` (`onRpmChanged`,
+   `onWatertempChanged` threshold checks) and `Gauges/WarningLoader.qml`
+   (`onRpmChanged`, `onWatertempChanged`, ...), each a short JavaScript handler.
+
+Fan-out points: one Dashboard NOTIFY signal -> gauge binding, warning
+Connections, `main.qml` Connections; one gauge value change -> Canvas repaint +
+tick/label delegate bindings + `warn()`.
+
+### Inference (not measured)
+
+Excess CPU over P2 is about 5 points for about 5 RPM changes/s (P3) and about
+12.4 points for about 15.7 gauge changes/s (P4): roughly 0.8-1.1 CPU-percentage
+points per gauge-value change per second, linear in change rate. That
+linearity is consistent with a fixed per-change repaint cost, such as the
+`needletrail` Canvas repaint plus scene-graph update, rather than with
+receive/decode cost (which the direct-UDP and K-Pro runs show is negligible).
+It does not identify which stage dominates. The harness reports
+percent-of-one-core style values; confirm against `run-info.txt` before
+converting to milliseconds.
+
+### Instrumentation (opt-in, default off)
+
+`ptprofile.h/.cpp` add counters that only run when PowerTune is started with
+`PT_PROFILE=1` (optional `PT_PROFILE_INTERVAL_MS`, 1000-60000, default 5000).
+Without the variable each probe is one relaxed atomic load; no timer is
+created and no QML counter runs (`PTProfile.enabled` is false). Probes only
+count and time; they do not change values, appearance, animation, UDP handling
+or publication rates. Do not leave profiling enabled in production images.
+
+Example, for a one-off run (for instance a systemd drop-in with
+`Environment=PT_PROFILE=1`, removed afterwards):
+
+```sh
+PT_PROFILE=1 PT_PROFILE_INTERVAL_MS=5000 <normal PowerTune start>
+```
+
+Each interval logs three lines (visible in the PowerTune log):
+
+- `INFO PowerTune profile: interval_ms=... process_cpu_pct=... threads_cpu_pct="name=pct,..."`
+  - per-thread CPU from `/proc/self/task/*/stat`. The split between the main
+    (GUI) thread and the render thread is the most useful single discriminator:
+    a large GUI-thread share points at QML/JS/Canvas painting; a large render
+    thread share points at scene-graph/GL.
+- `INFO PowerTune profile counters: name=delta ...` with:
+  - `udp.datagrams`, `udp.records`, `udp.id.{155,179,199,210,221}`
+  - `dash.<prop>.setter` and `dash.<prop>.emit` for rpm, speed, Watertemp,
+    TPS, MAP (setter minus emit = suppressed duplicates)
+  - `gauge.valueChanged.<name>` (QML-facing value changes per gauge),
+    `gauge.needletrail.requestPaint`, `gauge.needletrail.onPaint=N(avg_us=...)`
+  - `qml.main.on{Rpm,Watertemp}Changed`, `qml.warningloader.on{Rpm,Watertemp}Changed`
+  - `timer.calculations.25ms`, `timer.networkmanager.refresh` (idle work)
+  - `frame.sync`, `frame.render`, `frame.swapped`
+  - one-time `gauge.delegates.{majortick,minortick,label}` instantiation counts
+- one-time `INFO PowerTune profile fanout ...` with the receiver count on each
+  of the five NOTIFY signals (best effort; includes QML endpoints).
+
+Run P0, P2 and P4 (direct UDP is sufficient) once each with profiling on and
+compare: `gauge.needletrail.onPaint` count x avg_us versus total GUI-thread
+CPU gives the Canvas share directly; `frame.*` rates show whether changes are
+coalesced into frames; the same counters in P0 show recurring idle work.
+Instrumentation itself has a small cost, so compare instrumented runs with
+instrumented runs.
+
+### Recurring idle work (P0 candidates, hypotheses)
+
+Not yet attributed; each needs the per-thread split and counters above:
+
+- render-loop activity and swap on eglfs (`frame.*` in P0);
+- `QtSensors` sensors started at launch, if enabled;
+- `NetworkManagerClient` refresh timer (driven by D-Bus signals), GPS/serial
+  reconnect timers, status updates;
+- the 25 ms `calculations` timer (believed not to run unless Connect/odometer
+  start is invoked; the `timer.calculations.25ms` counter will confirm);
+- QML Connections and hidden components on `Settings/main.qml`;
+- log writes.
+
+Do not combine an idle-cost change with a changing-value change unless the
+counters show a shared root cause.
+
+### Ranked optimization opportunities (hypotheses; none applied)
+
+| Rank | Candidate | Expected benefit | Behavioral risk |
+|------|-----------|------------------|-----------------|
+| 1 | Cheaper or conditional `needletrail` repaint (only when trail is enabled, coarser repaint threshold, or a non-Canvas item) | highest if Canvas time dominates | medium: affects trail appearance |
+| 2 | Avoid per-change re-evaluation of tick/label colour bindings (state-change only when crossing a tick) | moderate | low if visually identical |
+| 3 | Coalesce Dashboard updates per frame | moderate | medium: changes interpolation/latency |
+| 4 | Merge redundant per-event JS handlers (`main.qml`, `WarningLoader`) | small | low |
+| 5 | Dedupe in `setMAP` | small, MAP only | low |
+| 6 | Idle work (after P0 attribution) | up to ~8.5 points | depends on source |
+
+Smallest first Device 0 A/B candidate: with profiling data in hand, run P4
+direct with the `needletrail` repaint disabled behind a temporary local build
+flag (diagnostic only, not for release) to isolate the Canvas share of the
+12.4-point increase before designing any appearance-preserving replacement.

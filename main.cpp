@@ -8,6 +8,10 @@
 #include "iomapdata.h"
 #include "downloadmanager.h"
 #include "ptpaths.h"
+#include "ptbuildinfo.h"
+#include "ptprofile.h"
+#include "dashboard.h"
+#include <QQuickWindow>
 #include <QDebug>
 #include <QDateTime>
 #include <QDir>
@@ -109,6 +113,7 @@ int main(int argc, char *argv[])
     initializeApplicationLogging();
     QApplication app(argc, argv);
     installApplicationMessageHandler();
+    qInfo().noquote() << ptBuildLogLine();
     app.setOrganizationName("Power-Tune");
     app.setOrganizationDomain("power-tune.org");
     app.setApplicationName("PowerTune");
@@ -122,10 +127,27 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("Connect", new Connect(&engine));
     engine.rootContext()->setContextProperty("Extender2",new Extender(&engine));
 
+    engine.rootContext()->setContextProperty("PTBuild", ptBuildInfo());
+    // Diagnostic counters; inert unless PT_PROFILE=1 is set in the environment.
+    engine.rootContext()->setContextProperty("PTProfile", PtProfile::instance());
+
     // PTBasePath and PTBaseUrl are legacy compatibility APIs.
     engine.rootContext()->setContextProperty("PTBasePath", ptBasePath());
     engine.rootContext()->setContextProperty("PTBaseUrl", ptBaseUrl());
     engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
+    if (PtProfile::enabled())
+    {
+        QQuickWindow *window = nullptr;
+        const auto roots = engine.rootObjects();
+        for (QObject *root : roots)
+        {
+            window = qobject_cast<QQuickWindow *>(root);
+            if (window)
+            {break;}
+        }
+        PtProfile::instance()->attach(window, qobject_cast<DashBoard *>(
+            engine.rootContext()->contextProperty("Dashboard").value<QObject *>()));
+    }
     return app.exec();
 
 }

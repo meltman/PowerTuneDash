@@ -177,6 +177,7 @@ Rectangle{
         maximumValue : maxvalue
         minimumValue: minvalue
         onValueChanged: {
+            if (PTProfile.enabled) { PTProfile.count("gauge.valueChanged." + mainvaluename) }
             warn();
         }
 
@@ -322,7 +323,10 @@ Rectangle{
                     property int value: gauge.value
 
                     anchors.fill: parent
-                    onValueChanged: requestPaint()
+                    onValueChanged: {
+                        if (PTProfile.enabled) { PTProfile.count("gauge.needletrail.requestPaint") }
+                        requestPaint()
+                    }
 
                     function degreesToRadians(degrees) {
                         return degrees * (Math.PI / 180);
@@ -331,6 +335,7 @@ Rectangle{
 
                     onPaint: {
                        // console.log(gauge.value)
+                        var profileStart = PTProfile.enabled ? PTProfile.nowUs() : 0;
                         var ctx = getContext("2d");
                         var gradient2;
                         gradient2 = ctx.createRadialGradient((parent.width / 2),(parent.height / 2), 0, (parent.width / 2),(parent.height / 2),parent.height );
@@ -351,6 +356,7 @@ Rectangle{
                                 degreesToRadians(valueToAngle(gauge.value) - 90),
                                 endangle < startangle);
                         ctx.stroke();
+                        if (PTProfile.enabled) { PTProfile.addTimeUs("gauge.needletrail.onPaint", PTProfile.nowUs() - profileStart) }
                     }
                 }
             }
@@ -363,6 +369,7 @@ Rectangle{
                 font.family: labelfont
                 color: styleData.value <= gauge.value ? labelcoloractive : labelcolorinactive
                 antialiasing: true
+                Component.onCompleted: { if (PTProfile.enabled) { PTProfile.count("gauge.delegates.label") } }
             }
 
             minorTickmark: Rectangle {
@@ -371,6 +378,7 @@ Rectangle{
                 antialiasing: true
                 smooth: true
                 color: styleData.value <= gauge.value ? minortickmarkcoloractive : minortickmarkcolorinactive
+                Component.onCompleted: { if (PTProfile.enabled) { PTProfile.count("gauge.delegates.minortick") } }
 
             }
 
@@ -380,6 +388,7 @@ Rectangle{
                 antialiasing: true
                 smooth: true
                 color: styleData.value <= gauge.value ? majortickmarkcoloractive : majortickmarkcolorinactive
+                Component.onCompleted: { if (PTProfile.enabled) { PTProfile.count("gauge.delegates.majortick") } }
             }
         }
     }

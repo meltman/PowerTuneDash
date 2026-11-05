@@ -70,12 +70,14 @@ Rectangle {
                 tripmeter.text = (Dashboard.Trip).toFixed(3)
             }
             function onWatertempChanged() {
+                if (PTProfile.enabled) { PTProfile.count("qml.main.onWatertempChanged") }
                 if (Dashboard.Watertemp > Dashboard.waterwarn) {
                     playwarning.start()
                 }
                 ;
             }
             function onRpmChanged() {
+                if (PTProfile.enabled) { PTProfile.count("qml.main.onRpmChanged") }
                 if (Dashboard.rpm > Dashboard.rpmwarn) {
                     playwarning.start()
                 }
@@ -762,8 +764,9 @@ Rectangle {
                     }
                 }
                 Text {
-
-                    text: " V 1.99t " + Dashboard.Platform
+                    text: " " + PTBuild.product + "\n " + PTBuild.display
+                          + "\n Upstream base: " + PTBuild.upstreamBase
+                          + "\n " + Dashboard.Platform
 
                     color: "white"
                     font.pixelSize: windowbackround.width / 55

@@ -1,5 +1,6 @@
 #include "udpreceiver.h"
 #include "dashboard.h"
+#include "ptprofile.h"
 #include <QUdpSocket>
 #include <QDataStream>
 #include <QDebug>
@@ -60,6 +61,7 @@ void udpreceiver::processPendingDatagrams()
         datagram.resize(int(udpSocket->pendingDatagramSize()));
         udpSocket->readDatagram(datagram.data(), datagram.size());
 
+        PT_PROFILE_COUNT("udp.datagrams");
         QDataStream in(&datagram, QIODevice::ReadOnly);
         QString raw = datagram.data();
         //qDebug()<<raw;
@@ -74,6 +76,12 @@ void udpreceiver::processPendingDatagrams()
         QStringList list = raw.split( "," );
         int ident =list[0].toInt();
         float Value =list[1].toFloat();
+        if (PtProfile::enabled())
+        {
+            PtProfile::instance()->count(QStringLiteral("udp.records"));
+            if (ident == 155 || ident == 179 || ident == 199 || ident == 210 || ident == 221)
+            {PtProfile::instance()->count(QStringLiteral("udp.id.%1").arg(ident));}
+        }
 
         switch(ident) {
 

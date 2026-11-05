@@ -3,6 +3,7 @@
 
 #include <QStringList>
 #include <QObject>
+#include <QVariantMap>
 
 class DashBoard : public QObject
 {
@@ -647,6 +648,9 @@ class DashBoard : public QObject
 
     public:
     DashBoard(QObject *parent = 0);
+    // Diagnostic only: number of signal receivers (including QML bindings and
+    // Connections) for the NOTIFY signal of each named property.
+    QVariantMap profileFanOut(const QStringList &properties) const;
     //Steinhart Hart
     long R01 = 2000;
     long R02 = 4000;

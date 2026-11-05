@@ -337,6 +337,33 @@ grammar, parser edge cases, and `pt-udp-sim` commands are documented in
 [DAEMON_UDP_PROTOCOL.md](DAEMON_UDP_PROTOCOL.md). The new startup lifecycle
 and failure diagnostics require a focused Device 0 retest after installation.
 
+## Build identity and provenance
+
+Settings shows the fork identity, not the upstream string:
+
+```
+PowerTune i.MX8 Appliance
+<version> (<short SHA>)
+Upstream base: 1.99t
+```
+
+- `<version>` is the commit date of the packaged source (`YYYY.MM.DD`), and
+  `<short SHA>` is its 7-character commit hash. Two builds of the same revision
+  report identical values; two commits on one day differ by SHA.
+- `powertunedash.bb` derives both in `do_configure` from the source BitBake
+  fetched and exports `PT_BUILD_VERSION` / `PT_BUILD_REVISION`;
+  `PowertuneQMLGui.pro` turns them into compiler definitions (qmake variables of
+  the same names also work). `ptbuildinfo.h` holds the definitions, the
+  `PTBuild` QML context property, and the startup log line.
+- Startup logs one line, for example
+  `PowerTune build: version="2026.11.05", revision="10e010b"`.
+  A `branch="..."` field appears only if `PT_BUILD_BRANCH` is supplied; the
+  recipe does not supply it because a fetched checkout cannot establish it
+  reliably.
+- Missing metadata falls back to `unknown`. The application never runs Git and
+  does not need `.git`.
+- `1.99t` is retained only as the explicit "Upstream base" line.
+
 ## Recovery and U-Boot
 
 The validated Linux U-Boot environment geometry is:
