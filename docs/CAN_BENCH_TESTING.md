@@ -265,3 +265,123 @@ Linux SocketCAN/FlexCAN support and permission to open the selected interface.
 `python3-pyserial`) and CH341 kernel support. The documented interface setup
 and `candump`/`cansend` checks use `iproute2` and `can-utils`. No runtime image
 packages are added by this change.
+
+## Waveshare transmit anomaly investigation (1,000,000 bit/s)
+
+Observed on Device 0 (canE, 1 Mbit/s): `canE -> Waveshare` works for
+`456#CAFEBABE` and `660#032000000178`; `Waveshare -> canE` works for
+`123#DEADBEEF`, but `660#032000000178` raises the canE RX error counter to about
+130 and drives canE ERROR-PASSIVE.
+
+### Framing comparison against Waveshare's published protocol
+
+`pt-usb-can send ... --dump-serial-frame` prints the exact configuration and
+data bytes without opening the adapter or transmitting. Bytes for each vector
+at 1,000,000 bit/s:
+
+| Frame | Bytes written |
+|-------|---------------|
+| configuration (both) | `AA 55 12 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 14` |
+| `123#DEADBEEF` | `AA C4 23 01 DE AD BE EF 55` |
+| `660#032000000178` | `AA C6 60 06 03 20 00 00 01 78 55` |
+
+Checked against the published "Serial (USB) to CAN Protocol Conversion" page:
+
+- header `0xAA`; end code `0x55`; no checksum in variable-length data frames;
+- type byte `0xC0 | (extended ? 0x20 : 0) | (remote ? 0x10 : 0) | DLC`, so
+  DLC 4 -> `C4`, DLC 6 -> `C6`;
+- standard ID is two bytes, low byte first (`0x123` -> `23 01`,
+  `0x660` -> `60 06`), matching the published `0x123` and `0x103` examples;
+- frame length is `1 + 1 + 2 + DLC + 1` for standard frames (9 bytes for DLC 4,
+  11 bytes for DLC 6); each data frame is written in a single `write()`;
+- configuration is the 20-byte `0x12` variable-protocol command: bitrate
+  `0x01` = 1 Mbit/s, frame type `0x01`, mode normal, auto-retransmit `0x00`
+  (enabled), checksum = low 8 bits of the sum of bytes 2..18 (`0x14`);
+- the published examples (`AA C8 23 01 11..88 55`, `AA C2 03 01 11 22 55`, and
+  both extended examples) are encoded as unit tests, plus a table over DLC 0-8
+  and IDs `0x000, 0x103, 0x123, 0x456, 0x660, 0x7FF`.
+
+The tool is also unrelated to payload content: nothing treats bytes after
+DLC 4 differently, and a six-byte payload produces no off-by-one (length is
+computed from the payload, tests cover every DLC). The Waveshare Linux C demo
+was not re-examined for short-frame handling in this pass; its fixed 20-byte
+protocol is a different mode that `pt-usb-can` does not use.
+
+### Conclusion
+
+No framing defect was found: both vectors are byte-identical to what the
+published protocol specifies, and the two vectors differ only in ID, DLC and
+payload, all encoded by the same code path. The root cause is therefore **not
+established** and is not attributable to `pt-usb-can` serial framing. Facts
+that point elsewhere (hypotheses, unproven): the failing frame is the one with
+many consecutive zero bits (`00 00` in the payload plus `0x660`'s ID), so a
+bit-timing or sample-point mismatch between the adapter's CAN controller and
+canE at 1 Mbit/s that only shows on certain stuffing patterns would fit; and
+the adapter's auto-retransmit (enabled by default) repeats a frame that is
+destroyed on the bus, which would inflate the error counter on a single send.
+Receiving from canE works, which does not exercise the adapter's transmitter.
+
+### Smallest controlled Device 0 test matrix
+
+First confirm the bytes on the host: run with `--dump-serial-frame` and compare
+to the table. Then, with canE reset (`ip link set canE down/up`) and
+`ip -details -statistics link show canE` before and after each row, one send per
+row, using `--no-auto-retransmit` (adapter's documented option 0x01; default is
+unchanged) to stop repeats from masking or inflating the counters:
+
+| # | Purpose | ID | Data |
+|---|---------|----|------|
+| 1 | known good baseline | `123` | `DEADBEEF` |
+| 2 | ID effect (DLC/payload same as 1) | `660` | `DEADBEEF` |
+| 3 | DLC effect (ID same as 1) | `123` | `DEADBEEF0000` |
+| 4 | payload effect (ID/DLC same as failing) | `660` | `DEADBEEFDEAD` |
+| 5 | failing vector, retransmit disabled | `660` | `032000000178` |
+| 6 | zero-run effect (ID same as 1) | `123` | `032000000178` |
+| 7 | repeat of 5 at 500000 on both ends | `660` | `032000000178` |
+
+Interpretation: failures following the payload (rows 5-6 but not 2-4) implicate
+bit-stuffing/timing; following the ID implicates row 2; row 7 passing with 5
+failing implicates 1 Mbit/s bit timing (sample point) of the adapter, canE or
+the cabling/termination at that rate. If row 5 still raises the counter by only
+a few counts while default auto-retransmit raises it by about 130, the
+retransmit loop is the amplifier, not the cause. Do not change canE settings,
+K-Pro decoding or PowerTune as part of this matrix.
+
+## Appliance-managed CAN and K-Pro services
+
+Two systemd units (installed and enabled by the `powertunedash` recipe in
+`meta-powertune`) own the K-Pro lifecycle:
+
+- `powertune-can.service` (oneshot, `RemainAfterExit`) runs
+  `ip link set canE down`, then `type can bitrate 1000000 restart-ms 100`,
+  then `up`. It is idempotent across boot and `systemctl restart`; any failing
+  step fails the unit with the `ip` error in the journal.
+- `powertune-kpro-bridge.service` `Requires=`/`After=` the CAN unit and runs
+  `/usr/bin/kpro-powertune-bridge --can-interface canE --profile
+  hondata-motec` (no `--diagnostic`), restarting on failure with
+  `StartLimitBurst=5` per 60 s.
+
+`powertunedash.service` is independent; UDP lets either process start first.
+
+Validated facts: `canE` is empirically the populated Device 0 P8 CAN
+interface; Casey's K-Pro is configured for 1 Mbps; sustained Device 0 ↔
+Device 1 FlexCAN testing at 1 Mbps passed with both nodes `ERROR-ACTIVE` and
+zero error counters; `ISO_GND_1` was required between the two isolated bench
+nodes (with CAN_H and CAN_L). Real K-Pro vehicle validation remains pending.
+
+### Cold-boot acceptance procedure
+
+1. With the K-Pro-format source (or bench peer) connected, power-cycle Device 0.
+2. `systemctl status powertune-can powertune-kpro-bridge powertunedash`:
+   CAN unit `active (exited)`, the other two `active (running)`.
+3. `ip -details link show canE`: `UP`, `bitrate 1000000`, `restart-ms 100`,
+   `ERROR-ACTIVE`.
+4. `journalctl -b -u powertune-can -u powertune-kpro-bridge` shows both
+   breadcrumbs (`PowerTune CAN: interface=canE bitrate=1000000 ...`,
+   `PowerTune K-Pro bridge: interface=canE profile=hondata-motec
+   destination=127.0.0.1:45454`) and no per-frame logging.
+5. Gauges respond to the bench source over UDP `127.0.0.1:45454`.
+6. `kill` the bridge once: it restarts after ~2 s; `systemctl restart
+   powertune-can` is repeatable without error.
+7. Failure check: set `PT_CAN_INTERFACE` to a nonexistent name, restart the
+   CAN unit, confirm a nonzero result and clear journal error; restore it.

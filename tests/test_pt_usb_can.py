@@ -178,5 +178,103 @@ class ProtocolTests(unittest.TestCase):
         )
 
 
+class TransmitFramingTests(unittest.TestCase):
+    """Variable-length frames per Waveshare's published examples."""
+
+    PUBLISHED = (
+        # (can_id, extended, data, serial bytes) from the protocol page.
+        (0x123, False, bytes.fromhex("1122334455667788"), "AA C8 23 01 11 22 33 44 55 66 77 88 55"),
+        (0x103, False, bytes.fromhex("1122"), "AA C2 03 01 11 22 55"),
+        (0x1234567, True, bytes.fromhex("1122334455667788"), "AA E8 67 45 23 01 11 22 33 44 55 66 77 88 55"),
+        (0x1033021, True, bytes.fromhex("1122"), "AA E2 21 30 03 01 11 22 55"),
+    )
+
+    def test_published_examples(self):
+        for can_id, extended, data, expected in self.PUBLISHED:
+            with self.subTest(can_id=hex(can_id)):
+                packet = pt_usb_can.build_data_frame(can_id, data, extended)
+                self.assertEqual(packet, bytes.fromhex(expected))
+
+    def test_reported_vectors(self):
+        self.assertEqual(
+            pt_usb_can.build_data_frame(0x123, bytes.fromhex("DEADBEEF")),
+            bytes.fromhex("AAC42301DEADBEEF55"),
+        )
+        self.assertEqual(
+            pt_usb_can.build_data_frame(0x660, bytes.fromhex("032000000178")),
+            bytes.fromhex("AAC66006032000000178" "55"),
+        )
+
+    def test_table_all_dlcs_and_ids(self):
+        for can_id in (0x000, 0x103, 0x123, 0x456, 0x660, 0x7FF):
+            for dlc in range(9):
+                data = bytes((0x11 * (i + 1)) & 0xFF for i in range(dlc))
+                with self.subTest(can_id=hex(can_id), dlc=dlc):
+                    packet = pt_usb_can.build_data_frame(can_id, data)
+                    expected = (
+                        bytes((0xAA, 0xC0 | dlc, can_id & 0xFF, can_id >> 8))
+                        + data
+                        + b"\x55"
+                    )
+                    self.assertEqual(packet, expected)
+                    self.assertEqual(len(packet), 5 + dlc)
+
+    def test_configuration_precedes_nothing_extra(self):
+        config = pt_usb_can.build_configuration(1_000_000)
+        self.assertEqual(len(config), 20)
+        self.assertEqual(config[:4], bytes((0xAA, 0x55, 0x12, 0x01)))
+        self.assertEqual(config[14], 0x00)
+        self.assertEqual(config[19], sum(config[2:19]) & 0xFF)
+        disabled = pt_usb_can.build_configuration(1_000_000, auto_retransmit=False)
+        self.assertEqual(disabled[14], 0x01)
+        self.assertEqual(disabled[19], sum(disabled[2:19]) & 0xFF)
+
+    def test_dump_serial_frame_does_not_open_adapter(self):
+        def forbidden(*args, **kwargs):
+            raise AssertionError("adapter must not be opened")
+
+        output = StringIO()
+        with redirect_stdout(output):
+            status = pt_usb_can.run(
+                ["send", "--can-bitrate", "1000000", "--id", "660",
+                 "--data", "032000000178", "--dump-serial-frame"],
+                ports_provider=forbidden,
+                serial_opener=forbidden,
+            )
+        self.assertEqual(status, 0)
+        text = output.getvalue()
+        self.assertIn("AA 55 12 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 14", text)
+        self.assertIn("AA C6 60 06 03 20 00 00 01 78 55", text)
+        self.assertIn("not transmitted", text)
+
+    def test_send_writes_configuration_then_frame(self):
+        written = []
+
+        class Port:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def write(self, data):
+                written.append(bytes(data))
+
+            def flush(self):
+                pass
+
+        ports = [SimpleNamespace(device="/dev/ttyUSB7", vid=0x1A86, pid=0x7523)]
+        with redirect_stdout(StringIO()):
+            pt_usb_can.run(
+                ["send", "--can-bitrate", "1000000", "--id", "660",
+                 "--data", "032000000178"],
+                ports_provider=lambda: ports,
+                serial_opener=lambda device, baud: Port(),
+            )
+        self.assertEqual(len(written), 2)
+        self.assertEqual(len(written[0]), 20)
+        self.assertEqual(written[1], bytes.fromhex("AAC6600603200000017855"))
+
+
 if __name__ == "__main__":
     unittest.main()

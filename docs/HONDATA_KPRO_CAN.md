@@ -261,3 +261,14 @@ the workload-tool change. Actual K-Pro output, signal values, and an equipped
 vehicle remain unvalidated. Do not connect this telemetry-only prototype to
 a vehicle until the inferred layout is checked against manufacturer
 clarification or independently captured, safely obtained K-Pro output.
+
+## Appliance service lifecycle
+
+The bridge is appliance-managed by `powertune-kpro-bridge.service`, which
+depends on `powertune-can.service` (canE, 1,000,000 bit/s, restart-ms 100).
+Interface, bitrate, restart-ms and profile live in one file,
+`/etc/powertune/powertune-appliance.conf`. PowerTune's legacy Startup Daemon,
+ECU Connect, Generic CAN and `startdaemon.sh` controls are dormant and not part
+of the supported K-Pro lifecycle. Casey's K-Pro is configured for 1 Mbps;
+Device 0 ↔ Device 1 FlexCAN testing at 1 Mbps passed. Real K-Pro vehicle
+validation remains pending. See [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md).

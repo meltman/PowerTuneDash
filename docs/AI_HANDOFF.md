@@ -139,6 +139,17 @@ may be available in the established development environment; confirm their
 current behavior rather than assuming an uncommitted PowerTuneDash tree is
 included in a build.
 
+## K-Pro services
+
+`powertune-can.service` (canE, 1 Mbps, restart-ms 100) and
+`powertune-kpro-bridge.service` (hondata-motec, requires the CAN unit) are
+installed and enabled by the `powertunedash` recipe and configured from
+`/etc/powertune/powertune-appliance.conf`. `canE` is empirically Device 0's
+populated P8 CAN; `ISO_GND_1` is required between isolated bench nodes;
+Device 0 ↔ Device 1 at 1 Mbps passed. Legacy daemon UI controls are dormant.
+Real vehicle validation is pending. Boot checklist:
+[`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md).
+
 ## Change discipline
 
 Use role paths instead of adding hard-coded Linux paths, and preserve

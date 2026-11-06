@@ -410,3 +410,23 @@ CLI are in [`KPRO_SYNTHETIC_WORKLOADS.md`](KPRO_SYNTHETIC_WORKLOADS.md).
 Comparison methodology and process sampling are in
 [`PERFORMANCE_PROFILING.md`](PERFORMANCE_PROFILING.md). CPU/RSS/thread/
 context-switch metrics do not establish GPU rendering cost.
+
+## PT-016: Appliance-managed K-Pro CAN and bridge services
+
+**Decision:** Two systemd units own the K-Pro lifecycle:
+`powertune-can.service` (oneshot; canE, 1,000,000 bit/s, restart-ms 100) and
+`powertune-kpro-bridge.service` (`Requires=`/`After=` the CAN unit; profile
+`hondata-motec`; bounded `Restart=on-failure`). `powertunedash.service` remains
+independent because the UDP boundary tolerates either start order. Settings
+come from one file, `/etc/powertune/powertune-appliance.conf`; no
+configuration framework is introduced.
+
+**Rationale:** The path was validated on Device 0 (canE, 1 Mbps, sustained
+FlexCAN-to-FlexCAN with zero error counters and `ISO_GND_1` between isolated
+nodes). Systemd restart limits replace an application retry loop, and the
+legacy Startup Daemon / ECU Connect / Generic CAN controls and
+`startdaemon.sh` are dormant, not part of the supported lifecycle.
+
+**Compatibility and safety:** No decoder, UDP grammar, QML, NetworkManager or
+GPS changes. Breadcrumbs are emitted by the units; the bridge stays quiet
+without `--diagnostic`. Real K-Pro vehicle validation remains pending.

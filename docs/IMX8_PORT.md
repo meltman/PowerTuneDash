@@ -392,3 +392,16 @@ USB live boot is the default image-validation workflow. eMMC flashing is an
 intentional milestone deployment, not the routine test loop. Validate display,
 input, storage, GPS, and recovery-sensitive changes on Device 0 before
 considering the corresponding behavior established.
+
+## K-Pro CAN services
+
+`powertune-can.service` configures `canE` (empirically the populated Device 0
+P8 CAN interface) at 1 Mbps with restart-ms 100, without
+`/etc/network/interfaces` or the legacy PowerTune CAN setup.
+`powertune-kpro-bridge.service` runs after and requires it, sending to UDP
+`127.0.0.1:45454`. `powertunedash.service` is not ordered against either. Both
+are enabled on `powertune-image` by the `powertunedash` recipe and configured
+by `/etc/powertune/powertune-appliance.conf`. The bridge is not started from
+the legacy daemon UI. `ISO_GND_1` was required between isolated bench nodes.
+Real vehicle validation is pending; see
+[`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md) for the boot acceptance procedure.

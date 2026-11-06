@@ -64,7 +64,7 @@ def validate_bitrate(bitrate):
     return bitrate
 
 
-def build_configuration(bitrate, frame_type="standard"):
+def build_configuration(bitrate, frame_type="standard", auto_retransmit=True):
     """Build the 20-byte 0x12 variable-protocol normal-mode setup command."""
     validate_bitrate(bitrate)
     if frame_type not in FRAME_TYPES:
@@ -82,7 +82,7 @@ def build_configuration(bitrate, frame_type="standard"):
             0, 0, 0, 0,  # filter ID
             0, 0, 0, 0,  # block/mask ID
             0x00,        # normal mode
-            0x00,        # automatic retransmission enabled
+            0x00 if auto_retransmit else 0x01,  # 0x00 auto-retransmit, 0x01 disabled
             0, 0, 0, 0,  # reserved
         )
     )
@@ -291,8 +291,8 @@ def open_adapter(device, serial_baud):
     )
 
 
-def configure_adapter(port, bitrate, frame_type):
-    port.write(build_configuration(bitrate, frame_type))
+def configure_adapter(port, bitrate, frame_type, auto_retransmit=True):
+    port.write(build_configuration(bitrate, frame_type, auto_retransmit))
     port.flush()
 
 
@@ -336,6 +336,18 @@ def make_parser():
     send.add_argument("--data", default="", help="0-8 payload bytes as hex")
     send.add_argument("--extended", action="store_true", help="use a 29-bit ID")
     send.add_argument("--device", help="explicit matching adapter tty path")
+    send.add_argument(
+        "--dump-serial-frame",
+        action="store_true",
+        help="print the exact serial bytes (configuration and data frame) and exit "
+        "without opening the adapter or transmitting",
+    )
+    send.add_argument(
+        "--no-auto-retransmit",
+        action="store_true",
+        help="diagnostic: set the adapter's documented 'disable auto-retransmit' "
+        "option (default keeps auto-retransmit enabled)",
+    )
     send.add_argument("--serial-baud", type=int, default=DEFAULT_SERIAL_BAUD)
 
     receive = subparsers.add_parser("receive", help="receive and display CAN frames")
@@ -349,12 +361,34 @@ def make_parser():
     return parser
 
 
+def hex_bytes(data):
+    return " ".join(f"{byte:02X}" for byte in data)
+
+
+def dump_serial_frames(args):
+    """Print the serial byte sequences for a send without touching hardware."""
+    extended = args.extended
+    can_id = parse_can_id(args.id, extended)
+    data = parse_data(args.data)
+    frame_type = "extended" if extended else "standard"
+    configuration = build_configuration(
+        args.can_bitrate, frame_type, not args.no_auto_retransmit
+    )
+    packet = build_data_frame(can_id, data, extended)
+    print(f"configuration ({len(configuration)} bytes): {hex_bytes(configuration)}")
+    print(f"data frame ({len(packet)} bytes): {hex_bytes(packet)}")
+    print("not transmitted (--dump-serial-frame)")
+    return 0
+
+
 def run(argv=None, ports_provider=None, serial_opener=None):
     args = make_parser().parse_args(argv)
     if args.command == "discover":
         return discover()
 
     validate_bitrate(args.can_bitrate)
+    if args.command == "send" and args.dump_serial_frame:
+        return dump_serial_frames(args)
     _, list_ports = get_serial_modules()
     ports = ports_provider() if ports_provider else list_ports.comports()
     device = resolve_device(ports, args.device)
@@ -367,7 +401,9 @@ def run(argv=None, ports_provider=None, serial_opener=None):
         packet = build_data_frame(can_id, data, extended)
         frame_type = "extended" if extended else "standard"
         with opener(device, args.serial_baud) as port:
-            configure_adapter(port, args.can_bitrate, frame_type)
+            configure_adapter(
+                port, args.can_bitrate, frame_type, not args.no_auto_retransmit
+            )
             port.write(packet)
             port.flush()
         print(
