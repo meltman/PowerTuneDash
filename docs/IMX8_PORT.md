@@ -374,9 +374,99 @@ The validated Linux U-Boot environment geometry is:
 
 `fw_printenv` and `fw_setenv` use the matching `/etc/fw_env.config`. The image
 retains CompuLab's `cl-deploy` and `cl-uboot` command-line recovery/deployment
-tools. The current boot policy is recovery-oriented; preserve the ability to
-inspect and repair U-Boot from Linux. Do not infer additional boot-selection
-semantics from the environment geometry alone.
+tools.
+
+### Validated Device 0 boot flow
+
+The saved environment inspected on Device 0 has `bootcmd=run bsp_bootcmd`.
+`bsp_bootcmd` iterates the space-separated `bootlist`, invoking each named
+setup command, then attempting `boot.scr` and, if it returns or is absent,
+the kernel Image and device tree. If a candidate does not boot, it proceeds
+to the next. The observed maintenance order is `usb_ul sd_ul emmc_ul`:
+
+| Candidate | Setup | Observed device | Observed root |
+| --- | --- | --- | --- |
+| `usb_ul` | Starts USB, selects USB | `usb_dev=0`, `boot_part=1` | `usb_root=/dev/sda2` |
+| `sd_ul` | Selects MMC | `sd_dev=1`, `boot_part=1` | `sd_root=/dev/mmcblk1p2` |
+| `emmc_ul` | Selects MMC | `emmc_dev=2`, `boot_part=1` | `emmc_root=/dev/mmcblk2p2` |
+
+This is CompuLab's `bootlist` flow, not a change to distro `boot_targets`.
+The observed `preboot`, `altbootcmd`, and `bootlimit` are empty. Boot scripts
+on the selected media can themselves change the eventual boot behavior; the
+environment alone cannot guarantee the contents or health of those media.
+
+### Appliance boot modes
+
+`/usr/bin/pt-boot-mode` reads the actual environment using `fw_printenv`. It
+does not use a mode marker. The validated mode sets are:
+
+| Mode | `bootdelay` | `bootlist` | Automatic boot |
+| --- | --- | --- | --- |
+| DRIVE | `0` | `emmc_ul` | eMMC only |
+| DIAG | `2` | `usb_ul sd_ul emmc_ul` | USB, SD, then eMMC fallback |
+
+**Warning:** DRIVE deliberately removes the normal interactive boot delay
+and bypasses USB and SD service-image autoboot. Before selecting DRIVE,
+confirm eMMC boots successfully and that an independent recovery route is
+available. DIAG restores the observed maintenance order, not a guarantee
+that a USB image or eMMC is bootable.
+
+For example (output abbreviated; the command also prints the checked scripts
+and device/root values):
+
+```text
+$ sudo pt-boot-mode status
+DIAG
+bootdelay=2
+bootlist=usb_ul sd_ul emmc_ul
+bootcmd=run bsp_bootcmd
+...
+$ sudo pt-boot-mode drive
+DRIVE (no reboot performed)
+$ sudo pt-boot-mode status
+DRIVE
+bootdelay=0
+bootlist=emmc_ul
+...
+$ sudo pt-boot-mode diag
+DIAG (no reboot performed)
+```
+
+`CUSTOM` indicates that the values do not match a mode, or that a checked
+boot command, target, root, or boot-limit policy differs from the recorded
+Device 0 flow. The tool refuses writes if those critical policy values differ;
+inspect the displayed values before manually resolving any customization.
+The status checks are not a full audit of boot media, every environment
+variable, or other firmware. A failed environment read or unexpected
+`fw_env.config` is an error, not a `CUSTOM` result.
+
+Reading the environment and writing it may require root; no sudo policy is
+supplied. The tool validates
+the configuration and reads the environment first, changes only differing
+`bootdelay`/`bootlist` values, verifies each write and rereads the final state.
+DRIVE changes `bootlist` before `bootdelay`; DIAG restores `bootdelay` before
+`bootlist`. No automatic reboot occurs. Changes are **not atomic**: if a
+write or verification fails, the error identifies the variable and original
+values; inspect `pt-boot-mode status` before any reboot. No automatic rollback
+is attempted. Avoid concurrent environment writers during a switch.
+
+### Recovery
+
+While Linux is still running, first inspect `pt-boot-mode status` and
+`fw_printenv bootdelay bootlist bootcmd bsp_bootcmd`. If the validated
+environment is intact, `pt-boot-mode diag` restores the maintenance values.
+If the manager refuses a customized policy, investigate it rather than
+overwriting scripts. If manual recovery is needed and the policy has been
+independently confirmed, as root run `fw_setenv bootdelay 2`, verify with
+`fw_printenv bootdelay`, then `fw_setenv bootlist 'usb_ul sd_ul emmc_ul'` and
+verify with `fw_printenv bootlist`. Stop on any error and do not reboot until
+the environment is understood. If Linux no longer boots, use the board's
+independently verified external recovery method; a zero delay must not be
+assumed to allow normal serial interruption.
+
+This supported environment switch does not enable the parked Falcon, ATF or
+fast-eMMC experiments and does not change bootloader binaries or eMMC boot
+partitions. Device 0 validation of this new manager remains pending.
 
 ## Development and validation workflow
 
