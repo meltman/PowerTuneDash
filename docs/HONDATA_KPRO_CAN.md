@@ -257,10 +257,12 @@ Waveshare USB-CAN-A) and PowerTune's independent UDP presentation path have
 now also been exercised end-to-end with a synthetic frame: ID `0x660`,
 payload `03 20 00 00 01 78` decoded to RPM 800 and drove the existing gauge
 through UDP record `179,800`. No physical CAN transmission was performed for
-the workload-tool change. Actual K-Pro output, signal values, and an equipped
-vehicle remain unvalidated. Do not connect this telemetry-only prototype to
-a vehicle until the inferred layout is checked against manufacturer
-clarification or independently captured, safely obtained K-Pro output.
+the workload-tool change. In initial vehicle testing, reversed CAN_H/CAN_L
+were corrected and continuous real K-Pro traffic was observed. The existing
+Pi displayed about 55 °C ECT while the i.MX8Plus dashboard did not show the
+same result. Signal interpretation and the cause remain unvalidated pending
+raw capture analysis; this is not evidence that the published documentation
+or decoder is wrong.
 
 ## Appliance service lifecycle
 
@@ -270,5 +272,10 @@ Interface, bitrate, restart-ms and profile live in one file,
 `/etc/powertune/powertune-appliance.conf`. PowerTune's legacy Startup Daemon,
 ECU Connect, Generic CAN and `startdaemon.sh` controls are dormant and not part
 of the supported K-Pro lifecycle. Casey's K-Pro is configured for 1 Mbps;
-Device 0 ↔ Device 1 FlexCAN testing at 1 Mbps passed. Real K-Pro vehicle
-validation remains pending. See [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md).
+Device 0 ↔ Device 1 FlexCAN testing at 1 Mbps passed. Real K-Pro signal
+validation remains pending. See [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md)
+for stationary capture, privacy review, and offline analysis. The separate
+`kpro-capture-analyze` reports raw ECT bytes and labeled hypotheses without
+changing decoder formulas. `--no-udp` makes bridge replay offline-only; its
+stale timing uses replay processing time, while the analyzer uses capture
+timestamps and reports transitions at the next received frame.

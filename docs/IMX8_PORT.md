@@ -376,7 +376,7 @@ The validated Linux U-Boot environment geometry is:
 retains CompuLab's `cl-deploy` and `cl-uboot` command-line recovery/deployment
 tools.
 
-### Validated Device 0 boot flow
+### Observed CompuLab boot flow
 
 The saved environment inspected on Device 0 has `bootcmd=run bsp_bootcmd`.
 `bsp_bootcmd` iterates the space-separated `bootlist`, invoking each named
@@ -394,6 +394,10 @@ This is CompuLab's `bootlist` flow, not a change to distro `boot_targets`.
 The observed `preboot`, `altbootcmd`, and `bootlimit` are empty. Boot scripts
 on the selected media can themselves change the eventual boot behavior; the
 environment alone cannot guarantee the contents or health of those media.
+The byte-preserving factory capture from untouched Device 1 is the strict
+policy reference for this BSP. Its `bsp_bootcmd` value ends in `done;` followed
+by one ASCII space; the newline printed by `fw_printenv -n` is an output
+terminator, not that space. No arbitrary whitespace normalization is applied.
 
 ### Appliance boot modes
 
@@ -434,7 +438,7 @@ DIAG (no reboot performed)
 
 `CUSTOM` indicates that the values do not match a mode, or that a checked
 boot command, target, root, or boot-limit policy differs from the recorded
-Device 0 flow. The tool refuses writes if those critical policy values differ;
+Device 1 factory policy. The tool refuses writes if those critical policy values differ;
 inspect the displayed values before manually resolving any customization.
 The status checks are not a full audit of boot media, every environment
 variable, or other firmware. A failed environment read or unexpected
@@ -493,5 +497,10 @@ P8 CAN interface) at 1 Mbps with restart-ms 100, without
 are enabled on `powertune-image` by the `powertunedash` recipe and configured
 by `/etc/powertune/powertune-appliance.conf`. The bridge is not started from
 the legacy daemon UI. `ISO_GND_1` was required between isolated bench nodes.
-Real vehicle validation is pending; see
+Initial vehicle testing observed continuous CAN traffic after reversing
+initially swapped CAN_H/CAN_L. The Pi showed about 55 °C ECT but the
+i.MX8Plus did not show the same value; the cause remains unresolved.
+Full vehicle signal validation is pending; see
 [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md) for the boot acceptance procedure.
+The packaged `pt-car-diag` collects a bounded stationary, receive-only
+archive; that document also gives capture, privacy, and offline replay steps.

@@ -367,7 +367,7 @@ Validated facts: `canE` is empirically the populated Device 0 P8 CAN
 interface; Casey's K-Pro is configured for 1 Mbps; sustained Device 0 ↔
 Device 1 FlexCAN testing at 1 Mbps passed with both nodes `ERROR-ACTIVE` and
 zero error counters; `ISO_GND_1` was required between the two isolated bench
-nodes (with CAN_H and CAN_L). Real K-Pro vehicle validation remains pending.
+nodes (with CAN_H and CAN_L). Real K-Pro signal validation remains pending.
 
 ### Cold-boot acceptance procedure
 
@@ -385,3 +385,63 @@ nodes (with CAN_H and CAN_L). Real K-Pro vehicle validation remains pending.
    powertune-can` is repeatable without error.
 7. Failure check: set `PT_CAN_INTERFACE` to a nonexistent name, restart the
    CAN unit, confirm a nonzero result and clear journal error; restore it.
+
+## Stationary vehicle diagnostic capture
+
+Device 0 is installed for initial vehicle testing. CAN_H and CAN_L were
+initially reversed; correcting polarity produced continuous vehicle CAN
+traffic. The known-working Raspberry Pi dashboard showed ECT around 55 °C,
+while the i.MX8Plus dashboard did not show the same result. The cause remains
+unresolved; this observation does not establish a decoder or documentation
+error. The Pi and i.MX8Plus appliances can coexist on the same CAN bus.
+
+Run while safely stationary, not while driving:
+
+```sh
+sudo pt-car-diag --duration 60 --note "Ignition on, engine started at 10s, warm idle, Pi showed ECT 55C"
+```
+
+Default duration is 60 seconds; accepted integer range is 5–600. The note is
+stored verbatim. The suggested sequence is approximately 0–10 s ignition on,
+engine off; 10–30 s idle; 30–45 s two gentle RPM increases; 45–60 s idle.
+The output is a private `/var/tmp/powertune-car-diag-<UTC>.tar.gz` archive.
+The tool reads the configured interface, invokes `timeout -s INT <duration>
+candump -L <interface>` alongside the existing bridge, and records CAN link
+statistics before, near the midpoint, and after. It never sends CAN or UDP,
+reconfigures hardware, changes services, or reboots. Nonzero exit means
+capture or archive failure; optional collection errors are listed in the
+manifest. A failed archive retains the private working directory, whose path
+is printed; a partially created archive must not be treated as complete.
+
+`manifest.json` identifies the requested and actual times, available
+configuration, build revision, actual dashboard hash, reference-hash match,
+and individual collection results. The archive also contains the operator
+note, dashboard copy, sanitized config (unknown values redacted), service
+state and processes, CAN capture/status, journal, application log, and socket
+information. The reference dashboard hash is informational; vehicle
+dashboards need not match. UDP destination is recorded as the bridge's
+default, not proof of effective process arguments. `ss` and boot status may
+be unavailable, and system journals/logs can contain sensitive data.
+Interface, bitrate, and profile are configured values, not independently
+verified running-process settings. Compare service properties and CAN state.
+
+On the analysis machine, replace the address and timestamp with actual values:
+
+```sh
+scp root@DEVICE0:/var/tmp/powertune-car-diag-20261109T180000Z.tar.gz .
+mkdir vehicle-capture
+tar -xzf powertune-car-diag-20261109T180000Z.tar.gz -C vehicle-capture
+kpro-capture-analyze vehicle-capture/can/vehicle.candump --profile hondata-motec
+kpro-powertune-bridge --replay vehicle-capture/can/vehicle.candump --profile hondata-motec --diagnostic --no-udp --replay-speed 0
+```
+
+The analyzer reports all parseable observed IDs and DLCs before profile
+interpretation, malformed/unexpected frames, value ranges and freshness
+transitions at the next timestamped frame. ECT evidence includes assumed
+source ID/offset/DLC, observed bytes and changes, signed and unsigned values,
+the current decoded Celsius value and explicitly labeled offset hypotheses.
+It does not select a hypothesis or modify the decoder. Inspect the archive and
+CAN traffic for sensitive or unrelated information before sharing. After
+explicit review, a scrubbed capture can become a private regression fixture;
+record the source, collection date, profile, wiring, observed Pi value and
+physical test sequence. Do not automatically commit raw vehicle captures.

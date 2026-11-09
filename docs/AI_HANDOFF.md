@@ -150,6 +150,17 @@ Device 0 ↔ Device 1 at 1 Mbps passed. Legacy daemon UI controls are dormant.
 Real vehicle validation is pending. Boot checklist:
 [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md).
 
+## Initial vehicle observation
+
+Device 0 is installed for initial K-Pro testing. CAN_H/CAN_L were initially
+reversed; correcting polarity yielded continuous real CAN traffic. The
+coexisting known-working Pi dashboard indicated ECT around 55 °C, while the
+i.MX8Plus dashboard did not show the same result. The cause is unresolved;
+do not change decoder formulas based on this observation. Use the stationary,
+receive-only `pt-car-diag` and offline analysis described in
+[`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md); inspect captures for sensitive
+traffic before sharing or creating a reviewed private fixture.
+
 ## Change discipline
 
 Use role paths instead of adding hard-coded Linux paths, and preserve

@@ -2,7 +2,7 @@
 """Read K-Pro4 CAN telemetry and publish verified PowerTune UDP records."""
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass
 import json
 import math
@@ -232,6 +232,8 @@ def make_parser():
                         help="mark a signal stale after this many seconds (default: 2)")
     parser.add_argument("--diagnostic", action="store_true",
                         help="show decoded values, validity changes, and UDP records")
+    parser.add_argument("--no-udp", action="store_true",
+                        help="offline replay/scenario analysis without opening or sending UDP")
     parser.add_argument("--summary", action="store_true",
                         help="print bounded processing metrics on exit")
     return parser
@@ -247,7 +249,7 @@ def open_udp_socket(socket_factory=socket.socket):
 
 
 def _process_frame(
-    frame, profile, tracker, publisher, now, diagnostics=None, metrics=None
+    frame, profile, tracker, publisher, now, diagnostics=None, metrics=None, no_udp=False
 ):
     try:
         signals = decode_frame(frame, profile)
@@ -280,18 +282,20 @@ def _process_frame(
             )
         is_mapped = signal.valid and signal.value is not None and signal.name in publisher.identifier_map
         packet = publisher.publish(signal)
-        if metrics and packet is not None:
+        if metrics and packet is not None and not no_udp:
             metrics.udp_records_sent += 1
-        elif metrics and is_mapped:
+        elif metrics and is_mapped and packet is None:
             metrics.unchanged_signal_suppressions += 1
         if packet is not None and diagnostics:
             diagnostics.write(
-                f"UDP {packet.decode('ascii')} -> "
+                f"{'would publish' if no_udp else 'UDP'} {packet.decode('ascii')} -> "
                 f"{publisher.destination[0]}:{publisher.destination[1]}"
             )
 
 
 def run_bridge(args, socket_factory=socket.socket, sleep=time.sleep, now=time.monotonic):
+    if args.no_udp and not (args.replay or args.scenario):
+        raise ValueError("--no-udp is restricted to replay or scenario input")
     if not math.isfinite(args.replay_speed) or args.replay_speed < 0:
         raise ValueError("--replay-speed must be a finite nonnegative number")
     if not math.isfinite(args.stale_after) or args.stale_after <= 0:
@@ -309,8 +313,10 @@ def run_bridge(args, socket_factory=socket.socket, sleep=time.sleep, now=time.mo
     started = now()
 
     try:
-        with open_udp_socket(socket_factory) as udp_socket:
-            publisher = PowerTunePublisher(udp_socket.sendto, destination)
+        udp_context = nullcontext(None) if args.no_udp else open_udp_socket(socket_factory)
+        with udp_context as udp_socket:
+            sendto = (lambda _packet, _destination: None) if args.no_udp else udp_socket.sendto
+            publisher = PowerTunePublisher(sendto, destination)
             if args.replay:
                 with open(args.replay, encoding="ascii") as replay_file:
                     frames = iter_replay(replay_file, args.replay_speed, sleep)
@@ -324,7 +330,7 @@ def run_bridge(args, socket_factory=socket.socket, sleep=time.sleep, now=time.mo
                                 diagnostics.write(f"signal {signal_name} stale")
                         _process_frame(
                             frame, args.profile, tracker, publisher, current,
-                            diagnostics, metrics,
+                            diagnostics, metrics, args.no_udp,
                         )
                 return
 
@@ -345,7 +351,7 @@ def run_bridge(args, socket_factory=socket.socket, sleep=time.sleep, now=time.mo
                             diagnostics.write(f"signal {signal_name} stale")
                     _process_frame(
                         frame, profile, tracker, publisher, current,
-                        diagnostics, metrics,
+                        diagnostics, metrics, args.no_udp,
                     )
                 return
 
