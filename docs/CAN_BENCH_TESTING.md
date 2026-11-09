@@ -394,6 +394,10 @@ traffic. The known-working Raspberry Pi dashboard showed ECT around 55 °C,
 while the i.MX8Plus dashboard did not show the same result. The cause remains
 unresolved; this observation does not establish a decoder or documentation
 error. The Pi and i.MX8Plus appliances can coexist on the same CAN bus.
+The first real K-Pro capture was lost: `/var/tmp` mapped to volatile tmpfs
+on this image, so its archive did not survive shutdown. No analysis or
+claims can be made from that missing capture beyond the operator observations
+above.
 
 Run while safely stationary, not while driving:
 
@@ -404,7 +408,15 @@ sudo pt-car-diag --duration 60 --note "Ignition on, engine started at 10s, warm 
 Default duration is 60 seconds; accepted integer range is 5–600. The note is
 stored verbatim. The suggested sequence is approximately 0–10 s ignition on,
 engine off; 10–30 s idle; 30–45 s two gentle RPM increases; 45–60 s idle.
-The output is a private `/var/tmp/powertune-car-diag-<UTC>.tar.gz` archive.
+The output is a private
+`/var/lib/powertune/diagnostics/powertune-car-diag-<UTC>.tar.gz` archive.
+On the appliance's persistent root filesystem this directory survives
+reboot and poweroff; verify that it is not separately mounted on volatile
+storage on a different deployment. The collector creates the directory
+privately if absent, preserves existing directory permissions, and uses
+private working directories and archives. Both the archive and any retained
+working directory live there. The archive is flushed and synced before
+success is reported.
 The tool reads the configured interface, invokes `timeout -s INT <duration>
 candump -L <interface>` alongside the existing bridge, and records CAN link
 statistics before, near the midpoint, and after. It never sends CAN or UDP,
@@ -412,6 +424,19 @@ reconfigures hardware, changes services, or reboots. Nonzero exit means
 capture or archive failure; optional collection errors are listed in the
 manifest. A failed archive retains the private working directory, whose path
 is printed; a partially created archive must not be treated as complete.
+
+Before powering down, use the exact archive path printed by the collector:
+
+```sh
+ls -lh /var/lib/powertune/diagnostics/
+sudo tar -tzf <archive> | head
+sync
+```
+
+Replace `<archive>` with that path (without angle brackets). Check the
+collector exit status and that the archive listing contains
+`can/vehicle.candump` and `manifest.json`; investigate failures before
+powering down.
 
 `manifest.json` identifies the requested and actual times, available
 configuration, build revision, actual dashboard hash, reference-hash match,
@@ -428,7 +453,7 @@ verified running-process settings. Compare service properties and CAN state.
 On the analysis machine, replace the address and timestamp with actual values:
 
 ```sh
-scp root@DEVICE0:/var/tmp/powertune-car-diag-20261109T180000Z.tar.gz .
+scp root@DEVICE0:/var/lib/powertune/diagnostics/powertune-car-diag-20261109T180000Z.tar.gz .
 mkdir vehicle-capture
 tar -xzf powertune-car-diag-20261109T180000Z.tar.gz -C vehicle-capture
 kpro-capture-analyze vehicle-capture/can/vehicle.candump --profile hondata-motec

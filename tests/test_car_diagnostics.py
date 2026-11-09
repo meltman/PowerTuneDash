@@ -106,6 +106,45 @@ class CarDiagnosticsTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     diag.parser().parse_args(["--duration", value])
 
+    def test_default_output_is_persistent_appliance_state(self):
+        self.assertEqual(diag.OUTPUT_DIR, Path("/var/lib/powertune/diagnostics"))
+        diag.validate_default_output(diag.OUTPUT_DIR)
+
+    def test_known_volatile_default_is_rejected(self):
+        for directory in ("/tmp/captures", "/var/tmp/captures",
+                          "/run/captures", "/var/volatile/captures",
+                          "/dev/shm/captures", "relative/captures"):
+            with self.subTest(directory=directory), self.assertRaises(ValueError):
+                diag.validate_default_output(Path(directory))
+        link = self.root / "volatile-link"
+        link.symlink_to("/var/tmp", target_is_directory=True)
+        with self.assertRaises(ValueError):
+            diag.validate_default_output(link / "captures")
+
+    def test_collector_rejects_volatile_configured_default_before_capture(self):
+        error = io.StringIO()
+        with (mock.patch.object(diag, "OUTPUT_DIR", Path("/var/tmp/pt-car-diag-test")),
+              mock.patch.object(diag.subprocess, "Popen") as capture,
+              contextlib.redirect_stderr(error)):
+            result = diag.collect(diag.parser().parse_args(["--duration", "5"]))
+        self.assertNotEqual(result, 0)
+        self.assertIn("refusing volatile", error.getvalue())
+        capture.assert_not_called()
+
+    def test_new_output_directory_is_private(self):
+        target = self.root / "new-diagnostics"
+        with (mock.patch.object(diag, "CONFIG", self.config),
+              mock.patch.object(diag, "DASHBOARD", self.dashboard),
+              mock.patch.object(diag, "LOG", self.log),
+              mock.patch.object(diag, "utc", return_value=FIXED),
+              mock.patch.object(diag.subprocess, "run", side_effect=self.fake_run),
+              mock.patch.object(diag.subprocess, "Popen", side_effect=self.fake_popen),
+              contextlib.redirect_stdout(io.StringIO())):
+            result = diag.collect(diag.parser().parse_args(["--duration", "5"]), target)
+        self.assertEqual(result, 0)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o700)
+        self.assertTrue((target / self.archive().name).is_file())
+
     def test_mocked_five_second_capture_archive_and_safety(self):
         note = 'Pi ECT 55C\nliteral $(not executed)\n'
         code, out, _ = self.run_capture(note=note)
@@ -214,6 +253,33 @@ class CarDiagnosticsTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("working directory retained", error)
         self.assertEqual(len([p for p in self.root.glob("powertune-car-diag-*") if p.is_dir()]), 1)
+
+    def test_archive_fsync_failure_retains_working_directory(self):
+        with mock.patch.object(diag.os, "fsync", side_effect=[None, OSError("fsync failed")]):
+            code, _, error = self.run_capture()
+        self.assertNotEqual(code, 0)
+        self.assertIn("fsync failed", error)
+        self.assertIn("working directory retained", error)
+        directories = [p for p in self.root.glob("powertune-car-diag-*") if p.is_dir()]
+        self.assertEqual(len(directories), 1)
+        self.assertTrue((directories[0] / "can/vehicle.candump").exists())
+
+    def test_output_directory_fsync_precedes_cleanup(self):
+        with mock.patch.object(diag, "fsync_directory", wraps=diag.fsync_directory) as sync:
+            code, _, _ = self.run_capture()
+        self.assertEqual(code, 0)
+        self.assertEqual([call.args[0] for call in sync.call_args_list],
+                         [self.root.parent, self.root])
+
+    def test_directory_fsync_failure_retains_working_directory(self):
+        with mock.patch.object(diag, "fsync_directory", side_effect=[None, OSError("directory sync failed")]):
+            code, out, error = self.run_capture()
+        self.assertNotEqual(code, 0)
+        self.assertIn("directory sync failed", error)
+        self.assertNotIn("Archive:", out)
+        directories = [p for p in self.root.glob("powertune-car-diag-*") if p.is_dir()]
+        self.assertEqual(len(directories), 1)
+        self.assertTrue((directories[0] / "manifest.json").exists())
 
     def test_packaging_declares_tools_and_dependencies(self):
         layer = ROOT.parent / "compulab-nxp-bsp/compulab-imx8mp-bsp/sources/meta-powertune"

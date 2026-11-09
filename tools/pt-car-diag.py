@@ -21,7 +21,9 @@ REFERENCE_HASH = "6f227adba4e1ee11c1c55d48e0ef17fd5b585fe79d508e3057561239ad25ae
 CONFIG = Path("/etc/powertune/powertune-appliance.conf")
 DASHBOARD = Path("/var/lib/powertune/UserDashboards/Dash1Export.txt")
 LOG = Path("/var/log/powertune/powertunedash.log")
-OUTPUT_DIR = Path("/var/tmp")
+OUTPUT_DIR = Path("/var/lib/powertune/diagnostics")
+VOLATILE_PATHS = (Path("/tmp"), Path("/run"), Path("/var/tmp"),
+                  Path("/var/volatile"), Path("/var/run"), Path("/dev/shm"))
 KEYS = ("PT_CAN_INTERFACE", "PT_CAN_BITRATE", "PT_CAN_RESTART_MS", "PT_KPRO_PROFILE")
 SERVICES = ("powertune-can.service", "powertune-kpro-bridge.service", "powertunedash.service")
 
@@ -159,12 +161,37 @@ class Collector:
                 self.put("can/midpoint.txt", "Unavailable: capture could not start\n")
 
 
-def collect(args, output_dir=OUTPUT_DIR):
-    start = utc()
-    root = Path(tempfile.mkdtemp(prefix="powertune-car-diag-", dir=output_dir))
-    collector = Collector(root)
-    archive = output_dir / ("powertune-car-diag-" + start.strftime("%Y%m%dT%H%M%SZ") + ".tar.gz")
+def validate_default_output(path):
+    resolved = path.resolve()
+    if not path.is_absolute() or any(
+        resolved == base.resolve() or base.resolve() in resolved.parents
+        for base in VOLATILE_PATHS
+    ):
+        raise ValueError(f"refusing volatile or relative default output directory: {path}")
+
+
+def fsync_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
     try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def collect(args, output_dir=None):
+    start = utc()
+    root = None
+    try:
+        if output_dir is None:
+            output_dir = OUTPUT_DIR
+            validate_default_output(output_dir)
+        output_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+        if output_dir == OUTPUT_DIR:
+            validate_default_output(output_dir)
+        fsync_directory(output_dir.parent)
+        root = Path(tempfile.mkdtemp(prefix="powertune-car-diag-", dir=output_dir))
+        collector = Collector(root)
+        archive = output_dir / ("powertune-car-diag-" + start.strftime("%Y%m%dT%H%M%SZ") + ".tar.gz")
         collector.put("operator-note.txt", args.note)
         collector.put("system/timing.txt", f"start_utc={start.isoformat()}\nrequested_duration_seconds={args.duration}\ntool_version={VERSION}\n")
         collector.run("system/hostname.txt", ["hostname"])
@@ -236,6 +263,9 @@ def collect(args, output_dir=OUTPUT_DIR):
             with tarfile.open(fileobj=file, mode="w:gz") as tar:
                 for name in manifest["files"]:
                     tar.add(root / name, arcname=name, recursive=False)
+            file.flush()
+            os.fsync(file.fileno())
+        fsync_directory(output_dir)
         shutil.rmtree(root)
         print(f"Archive: {archive} ({archive.stat().st_size} bytes)")
         if not collector.results["can_capture"]["ok"]:
@@ -243,7 +273,10 @@ def collect(args, output_dir=OUTPUT_DIR):
             return 1
         return 0
     except (OSError, tarfile.TarError, ValueError) as exc:
-        print(f"Collection/archive failed: {exc}; working directory retained: {root}", file=sys.stderr)
+        if root is None:
+            print(f"Collection setup failed: {exc}", file=sys.stderr)
+        else:
+            print(f"Collection/archive failed: {exc}; working directory retained: {root}", file=sys.stderr)
         return 1
 
 
