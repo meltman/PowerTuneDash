@@ -277,6 +277,7 @@ class PowerTunePublisherTests(unittest.TestCase):
             kpro_can.DecodedSignal("rpm", Decimal(2500), "rpm", 0x660),
             kpro_can.DecodedSignal("map_kpa", Decimal(101), "kPa", 0x662),
             kpro_can.DecodedSignal("ect_c", Decimal(90), "degC", 0x661),
+            kpro_can.DecodedSignal("iat_c", Decimal(18), "degC", 0x661),
             kpro_can.DecodedSignal("speed_kph", Decimal(100), "kph", 0x660),
             kpro_can.DecodedSignal("tps_pct", Decimal(35), "%", 0x662),
             kpro_can.DecodedSignal("injector_ms", Decimal("2.5"), "ms", 0x663),
@@ -285,7 +286,7 @@ class PowerTunePublisherTests(unittest.TestCase):
         self.assertEqual(
             records,
             [
-                b"179,2500", b"155,101", b"221,90",
+                b"179,2500", b"155,101", b"221,90", b"135,18",
                 b"199,100", b"210,35", None,
             ],
         )
@@ -295,10 +296,35 @@ class PowerTunePublisherTests(unittest.TestCase):
                 (b"179,2500", ("127.0.0.1", 45454)),
                 (b"155,101", ("127.0.0.1", 45454)),
                 (b"221,90", ("127.0.0.1", 45454)),
+                (b"135,18", ("127.0.0.1", 45454)),
                 (b"199,100", ("127.0.0.1", 45454)),
                 (b"210,35", ("127.0.0.1", 45454)),
             ],
         )
+
+    def test_vehicle_observed_iat_and_ect_values_decode_and_publish(self):
+        # Temperatures match the reported vehicle observation; other bytes are
+        # synthetic because the raw vehicle payload was not supplied here.
+        frame = kpro_can.CanFrame(0x661, bytes.fromhex("00120019000000"))
+        signals = {signal.name: signal for signal in kpro_can.decode_frame(frame)}
+        self.assertEqual(signals["iat_c"].value, Decimal(18))
+        self.assertEqual(signals["ect_c"].value, Decimal(25))
+        sent = []
+        publisher = powertune_udp.PowerTunePublisher(
+            lambda packet, target: sent.append((packet, target))
+        )
+        self.assertEqual(publisher.publish(signals["iat_c"]), b"135,18")
+        self.assertEqual(publisher.publish(signals["ect_c"]), b"221,25")
+        self.assertEqual(sent, [(b"135,18", ("127.0.0.1", 45454)),
+                                (b"221,25", ("127.0.0.1", 45454))])
+
+    def test_iat_identifier_matches_receiver_property_and_gauge_datasource(self):
+        receiver = (ROOT / "udpreceiver.cpp").read_text(encoding="utf-8")
+        dashboard = (ROOT / "dashboard.h").read_text(encoding="utf-8")
+        datasources = (ROOT / "Gauges/DatasourcesList.qml").read_text(encoding="utf-8")
+        self.assertRegex(receiver, r"case\s+135\s*:\s*m_dashboard->setIntaketemp\(Value\)")
+        self.assertIn("Q_PROPERTY(qreal Intaketemp READ Intaketemp WRITE setIntaketemp", dashboard)
+        self.assertRegex(datasources, r'sourcename:\s*"Intaketemp"\s+defaultsymbol:\s*""\s+titlename:\s*"IAT"')
 
     def test_invalid_nonfinite_and_unchanged_values_are_not_sent(self):
         sent = []

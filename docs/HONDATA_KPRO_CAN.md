@@ -79,7 +79,7 @@ SDL/ADL output is 500 kbit/s. All identifiers below are standard 11-bit.
 | `0x660` | Speed (`Speed`) | 2–3 | 16 | raw, kph | ID 199 → `Dashboard.speed` (`setSpeed`); verified, but receiver ignores it if `ExternalSpeed` is nonzero |
 | `0x660` | Gear (`Gear`) | 4 | 8 | raw, gear | None verified |
 | `0x660` | Voltage (`Voltage`) | 5 | 8 | raw / 10, V | None verified |
-| `0x661` | IAT (`IAT`) | 0–1 | 16 | raw, °C | None verified |
+| `0x661` | IAT (`IAT`) | 0–1 | 16 | raw, °C | ID 135 → `Dashboard.Intaketemp` (`setIntaketemp`), datasource `Intaketemp` (IAT); source-verified |
 | `0x661` | ECT (`ECT`) | 2–3 | 16 | raw, °C | ID 221 → `Dashboard.Watertemp` (`setWatertemp`); verified |
 | `0x661` | MIL (`MIL`) | 4 | 8 | raw status | None verified |
 | `0x661` | VTS (`VTS`) | 5 | 8 | raw status | None verified |
@@ -117,7 +117,7 @@ table as well.
 | `0x5F0` | Gear | 4 | 8 | raw, gear | None verified |
 | `0x5F0` | Voltage | 5 | 8 | raw / 10, V | None verified |
 | `0x5F0` | Speed | 6 | 8 | raw, kph | ID 199 → `Dashboard.speed` (`setSpeed`); verified, but receiver ignores it if `ExternalSpeed` is nonzero |
-| `0x5F2` | IAT | 0–1 | 16 | raw, °C | None verified |
+| `0x5F2` | IAT | 0–1 | 16 | raw, °C | ID 135 → `Dashboard.Intaketemp` (`setIntaketemp`), datasource `Intaketemp` (IAT); source-verified |
 | `0x5F2` | ECT | 2–3 | 16 | raw, °C | ID 221 → `Dashboard.Watertemp` (`setWatertemp`); verified |
 | `0x5F2` | MIL | 4 | 8 | raw status | None verified |
 | `0x5F2` | VTS | 5 | 8 | raw status | None verified |
@@ -176,9 +176,9 @@ continue displaying its last received value because the existing interface
 cannot clear or annotate it.
 
 Verified mappings are RPM → 179, speed in kph → 199, MAP in kPa → 155, TPS
-percent → 210, and ECT in Celsius → 221. These are source/property-equivalent
-mappings, not evidence that a specific car or K-Pro configuration emits those
-signals. The existing PowerTune speed setter honors `ExternalSpeed`; when it
+percent → 210, IAT in Celsius → 135, and ECT in Celsius → 221. These are
+source/property-equivalent mappings; the new IAT UDP route still needs
+on-device gauge validation. The existing PowerTune speed setter honors `ExternalSpeed`; when it
 is nonzero, identifier 199 does not update the displayed speed. Every other
 decoded K-Pro signal remains available to diagnostics/state tracking but is
 not sent to PowerTune until a specific compatible identifier and units are
@@ -260,9 +260,11 @@ through UDP record `179,800`. No physical CAN transmission was performed for
 the workload-tool change. In initial vehicle testing, reversed CAN_H/CAN_L
 were corrected and continuous real K-Pro traffic was observed. The existing
 Pi displayed about 55 °C ECT while the i.MX8Plus dashboard did not show the
-same result. Signal interpretation and the cause remain unvalidated pending
-raw capture analysis; this is not evidence that the published documentation
-or decoder is wrong.
+same result at that time. Subsequent real-vehicle captures/replays validated
+IAT 18 °C and ECT 25 °C on `0x661`; ECT `221,25` displayed 25 on Device 0's
+metric gauge. RPM, TPS and MAP were also physically validated. The earlier
+mismatch's cause is not established, and the newly added IAT UDP route
+has not yet been validated on the device.
 
 ## Appliance service lifecycle
 

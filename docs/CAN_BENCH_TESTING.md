@@ -394,6 +394,13 @@ traffic. The known-working Raspberry Pi dashboard showed ECT around 55 °C,
 while the i.MX8Plus dashboard did not show the same result. The cause remains
 unresolved; this observation does not establish a decoder or documentation
 error. The Pi and i.MX8Plus appliances can coexist on the same CAN bus.
+Subsequent real-vehicle captures/replays validated `0x661` IAT at 18 °C and
+ECT at 25 °C. The bridge emitted `221,25` and Device 0's metric gauge
+displayed 25. RPM, TPS, and MAP were also physically validated. Source tracing
+identifies IAT as UDP `135` → `setIntaketemp` → `Dashboard.Intaketemp`,
+the `Intaketemp` datasource labeled `IAT`; the newly added IAT publication
+still requires an on-device gauge check. The cause of the earlier 55 °C
+mismatch remains undetermined.
 The first real K-Pro capture was lost: `/var/tmp` mapped to volatile tmpfs
 on this image, so its archive did not survive shutdown. No analysis or
 claims can be made from that missing capture beyond the operator observations

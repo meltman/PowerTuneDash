@@ -10,6 +10,7 @@ POWER_TUNE_IDS = {
     "speed_kph": 199,
     "map_kpa": 155,
     "tps_pct": 210,
+    "iat_c": 135,
     "ect_c": 221,
 }
 
