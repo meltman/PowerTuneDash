@@ -1,8 +1,10 @@
 # PowerTune i.MX8MP Port
 
 This guide records the current PowerTune appliance architecture and the
-validated Device 0 baseline. Hardware observations below describe that target;
-they should not be inferred from a developer workstation or a BitBake host.
+validated appliance baselines. Device 1 is the GOLDEN boot/Linux/PowerTune
+baseline as of 2026-11-17; Device 0 remains the golden-old cellular/GPS
+reference. Hardware observations are target-specific and must not be inferred
+from a developer workstation or a BitBake host.
 
 ## Target and runtime layout
 
@@ -82,6 +84,10 @@ the application warning through the rebuilt Qt ALSA backend still requires
 runtime verification. The optional GStreamer media player and camera are
 separate features and are not changed by this warning-audio work; their
 behavior without an audio server is not established here.
+
+On the 2026-11-17 Device 1 cold boot, PowerTune reported `Warning audio
+unavailable; audible warnings disabled for this session`. Automatic startup
+and gauges passed, but warning audio must not be considered fixed.
 
 ## Dashboard architecture and persistence
 
@@ -181,7 +187,12 @@ in [HONDATA_KPRO_CAN.md](HONDATA_KPRO_CAN.md) and
 ## GPS and EC25 modem
 
 Validated target hardware includes a Quectel EC25. On Device 0, `/dev/ttyUSB1`
-is the GPS/NMEA data port. The primary AT interface is discovered separately
+is the GPS/NMEA data port. The EC25-A (`2c7c:0125`) binds USB interfaces 0-3
+to `option` and interface 4 to `qmi_wwan`; it exposes `/dev/ttyUSB0` through
+`/dev/ttyUSB3`, `/dev/cdc-wdm0` and `wwan0`. Device 1 has no modem currently,
+so its disabled `powertune-modem-provision.service` is expected. On Device 0
+the provisioning service kick-starts the modem after cold boot; preserve it
+and `gpsd`. The primary AT interface is discovered separately
 by platform provisioning; applications and provisioning must not assume a
 fixed AT tty number.
 
@@ -468,9 +479,66 @@ the environment is understood. If Linux no longer boots, use the board's
 independently verified external recovery method; a zero delay must not be
 assumed to allow normal serial interruption.
 
-This supported environment switch does not enable the parked Falcon, ATF or
-fast-eMMC experiments and does not change bootloader binaries or eMMC boot
-partitions. Device 0 validation of this new manager remains pending.
+This supported environment switch does not enable Falcon or change bootloader
+binaries or eMMC boot partitions. Device 0 validation of this new manager
+remains pending.
+
+### Device 1 GOLDEN Falcon baseline
+
+Device 1 passed cold-power acceptance on 2026-11-17 with Stealth Falcon,
+Linux `6.6.52-1.0-g72608893689e`, automatic PowerTune startup and working
+gauges, CAN, deferred AX210 firmware/PNVM, USB host/hub/HID and AX210
+Bluetooth, and zero failed systemd units. PowerTune reported
+`version="2026.11.10"` and `revision="7a3f2f1"`.
+
+The canonical Falcon source, artifact hashes, USB root cause, installation and
+recovery procedure are in `meta-powertune/docs/FALCON.md`. In particular,
+Device 1's active FIT is `/run/media/boot-mmcblk2p1/Image.itb`, **not**
+`/boot/Image.itb` on the ext4 rootfs. Do not change the validated USB sequence
+or casually grow SPL; only 3648 bytes of its OCRAM budget remain.
+
+### Kernel module and AX210 policy
+
+The committed appliance policy (`ad8153a118f66345bae7fe51b9012de96fbe9bf1`)
+uses machine-scoped `KERNEL_SPLIT_MODULES:iot-gate-imx8plus = "1"`.
+The image removes conventional `kernel-image` and the `kernel-modules`
+aggregate; Falcon FIT owns the executable kernel. USB HID, evdev, CAN,
+CAN_RAW, CAN_DEV, FlexCAN, cfg80211, mac80211 and USB serial core are built
+in. The validated fragment states:
+
+```text
+CONFIG_USB_HID=y
+CONFIG_INPUT_EVDEV=y
+CONFIG_CAN=y
+CONFIG_CAN_RAW=y
+CONFIG_CAN_DEV=y
+CONFIG_CAN_FLEXCAN=y
+CONFIG_CFG80211=y
+CONFIG_MAC80211=y
+CONFIG_USB_SERIAL=y
+CONFIG_IWLWIFI=m
+CONFIG_IWLMVM=m
+```
+
+Explicit split packages are
+`kernel-module-iwlwifi`, `kernel-module-iwlmvm`, `kernel-module-option`,
+`kernel-module-usb-wwan`, `kernel-module-qmi-wwan`, and
+`kernel-module-cdc-wdm`; dependencies include `iwlmvm -> iwlwifi`,
+`option -> usb_wwan`, and `qmi_wwan -> cdc-wdm`.
+
+Built-in iwlwifi probed around 0.77 seconds, before rootfs firmware was
+available, exhausted its candidate firmware versions with `-ENOENT`, and
+reported no suitable firmware. On the accepted cold boot, deferred iwlwifi
+loaded around 4.7 seconds, selected `iwlwifi-ty-a0-gf-a0-72.ucode` firmware
+`72.a764baac.0` and PNVM `581d4936`; iwlwifi/iwlmvm loaded, the PCI driver
+was iwlwifi and `wlan0` existed. Do not revert to built-in Wi-Fi or add a
+PCI unbind/rebind workaround.
+
+The split rootfs observed approximately 52 modules / 4.2 MiB versus the
+vendor image's approximately 953 / 42 MiB. Do not prune supported Bluetooth,
+networking or other modules just to save a few MiB on approximately 32 GB
+eMMC. Do not resurrect the custom `kernel-powertune-ax210` experiment or add
+MHI, QRTR, MBIM, CDC-NCM or qcserial merely because they are available.
 
 ## Development and validation workflow
 
@@ -496,11 +564,25 @@ P8 CAN interface) at 1 Mbps with restart-ms 100, without
 `127.0.0.1:45454`. `powertunedash.service` is not ordered against either. Both
 are enabled on `powertune-image` by the `powertunedash` recipe and configured
 by `/etc/powertune/powertune-appliance.conf`. The bridge is not started from
-the legacy daemon UI. `ISO_GND_1` was required between isolated bench nodes.
+the legacy daemon UI. On Device 1 `canC` maps to `308c0000.can` and `canE`
+to `308d0000.can`. A cold boot previously started CAN setup just before
+`can1` was renamed to `canE`; manual restart succeeded. The fix at
+`6704575a7a82050c02555a89efe648a5b104376e` waits for
+`/sys/class/net/${PT_CAN_INTERFACE}` using `/usr/bin/pt-wait-can-interface`,
+at roughly 100 ms intervals for at most 50 sleeps (about five seconds), then
+fails clearly if missing. Device 1 validated `sleep 0.1` at about 0.108 s.
+Cold-power acceptance showed `powertune-can.service` active (exited), `canE`
+UP/LOWER_UP, ERROR-ACTIVE, 1 Mbps and restart-ms 100. Do not replace the
+interface-aware wait with an arbitrary delay.
+
+`ISO_GND_1` was required between isolated bench nodes.
 Initial vehicle testing observed continuous CAN traffic after reversing
 initially swapped CAN_H/CAN_L. The Pi showed about 55 °C ECT but the
 i.MX8Plus did not show the same value; the cause remains unresolved.
 Full vehicle signal validation is pending; see
 [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md) for the boot acceptance procedure.
 The packaged `pt-car-diag` collects a bounded stationary, receive-only
-archive; that document also gives capture, privacy, and offline replay steps.
+archive in `/var/lib/powertune/diagnostics` on persistent appliance state;
+that document also gives capture, pre-poweroff verification, privacy, and
+offline replay steps. The first vehicle capture was lost when `/var/tmp`
+was backed by volatile tmpfs, so it supplies no analyzable evidence.

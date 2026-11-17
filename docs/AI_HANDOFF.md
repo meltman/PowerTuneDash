@@ -11,7 +11,39 @@ history. Use this order before architectural or platform work:
 6. Recent Git history
 7. `meta-powertune` documentation when working on the image/platform
 
-## Known-Good Baseline
+## GOLDEN Device 1 - 2026-11-17
+
+Device 1 passed cold-power acceptance: Stealth Falcon U-Boot
+`1138825790f4712aeadef93f2b73835e2000e153`, active FAT FIT SHA-256
+`b6aa45627d4098fb4d952aafe025f8432e4410cb692b9430fcf4c04204a8e964`,
+Linux `6.6.52-1.0-g72608893689e`, native split modules, deferred AX210
+firmware 72/PNVM, cold-boot-safe CAN, automatic PowerTune startup to working
+gauges, USB2514/HID/AX210 Bluetooth and zero failed systemd units.
+`powertunedash.service` was active (running), executing
+`/usr/bin/powertunedash -platform eglfs` and reporting
+`version="2026.11.10"` and `revision="7a3f2f1"`. The warning that audio is
+unavailable and audible warnings are disabled remains unresolved.
+
+Device 1 has AX210 but currently no EC25-A; Device 0 remains the golden-old
+reference and cellular/GPS runtime oracle. See `docs/IMX8_PORT.md` for runtime
+policy and `meta-powertune/docs/FALCON.md` for source/artifact identities,
+physical ownership, USB findings and the complete UUU recovery procedure.
+Never mistake rootfs `/boot/Image.itb` for the active FAT FIT.
+
+On Device 1 `powertune-can.service`, `powertune-kpro-bridge.service` and
+`powertunedash.service` are enabled (`powertunedash` preset: enabled); the
+modem-provision service is disabled
+because no modem is installed. PowerTune was restored from a temporary
+troubleshooting disable and passed automatic startup. The appliance preset
+intentionally disables NetworkManager wait-online, avahi socket, syslog socket
+and systemd-networkd-related units; those rules are package policy, not proof
+of each live unit's state. Weston, Docker and containerd were disabled on
+Device 0. Other Device 1 masked/disabled unit states have not been independently
+inspected in this documentation update; distinguish intentional policy,
+boot-performance choices and temporary troubleshooting before changing them.
+Never automatically re-enable services merely because they are disabled.
+
+## Device 0 reference baseline
 
 The validated Device 0 baseline is:
 
@@ -120,6 +152,10 @@ unverified. Do not guess or present source inspection as runtime validation.
   obtained bus observations. See `docs/LICENSING_AND_PROVENANCE.md`.
 * PowerTuneDash changes must be committed before BitBake consumes them.
 * Do not blindly stage unrelated `meta-powertune` BSP/Falcon work.
+* Do not change Stealth Falcon, its LDO4/HSIO/USB sequence, the working g726
+  FIT/kernel, or CAN DT/config without new evidence. SPL has only 3648 bytes
+  of OCRAM margin. Do not revert AX210 to built-in, add PCI rebind hacks, or
+  prune modules merely to save a few MiB.
 
 ## Source and image provenance
 
@@ -160,6 +196,9 @@ do not change decoder formulas based on this observation. Use the stationary,
 receive-only `pt-car-diag` and offline analysis described in
 [`CAN_BENCH_TESTING.md`](CAN_BENCH_TESTING.md); inspect captures for sensitive
 traffic before sharing or creating a reviewed private fixture.
+The first real capture was lost because `/var/tmp` was backed by volatile
+tmpfs; do not infer anything from the missing data. New archives and recovery
+workspaces use `/var/lib/powertune/diagnostics` on persistent appliance state.
 
 ## Change discipline
 
@@ -176,3 +215,63 @@ architecture, platform behavior, hardware integration, filesystem roles,
 persistence, compatibility, boot behavior, or the known-good baseline.
 Small implementation fixes that do not alter a documented contract do not
 need documentation churn.
+
+## Worktree audit - 2026-11-17
+
+This is a point-in-time host audit, not a clean-release guarantee. Recheck
+before staging or publication:
+
+* `meta-powertune`: the Falcon handoff is modified for this documentation
+  update; prior to it the layer was clean at `6704575`.
+* `u-boot-compulab`: clean at `1138825790f4712aeadef93f2b73835e2000e153`.
+* `PowerTuneDash`: both handoffs already had uncommitted edits before the
+  GOLDEN update. Other changes include tracked Python bytecode under
+  `tests/__pycache__` and `tools/__pycache__`, two UDP control fixtures and
+  `tests/test_kpro_workload.py`; untracked items include additional bytecode,
+  `tests/fixtures/boot/` and `tests/test_boot_mode.py`. Review rather than
+  sweeping them into a documentation commit or deleting them.
+* BSP sources: `meta-imx/meta-imx-sdk/conf/distro/include/fsl-imx-base.inc`
+  is modified to remove the `pulseaudio` distro-feature removal. Its purpose
+  and relationship to the observed audio warning have not been established;
+  preserve and investigate it rather than silently treating it as validated.
+  The other inspected BSP layers and manifest repository were clean.
+* The outer `compulab-yocker` repository on branch `devel` has untracked
+  `sudo`, `sysctl`, worktree directories, Device1 boot0/DT captures,
+  `falcon-f5-flash.bin`, `golden-falcon-reconstruct/`, reference/config
+  directories and configuration/home archives. These may contain sensitive
+  or forensic material; do not casually delete or publish them.
+
+## Future Wrench transition
+
+1. Freeze the GOLDEN documentation, then audit all repository worktrees and
+   untracked forensic/staging material; do not casually delete it. Commit the
+   reviewed documentation before further optimization.
+2. Casey wants the validated work published to Casey's GitHub account. First
+   confirm remotes and intended branches, review tracked content for secrets
+   and build artifacts, commit handoff/recovery documentation, and preserve
+   validated commit IDs. Push only after Casey explicitly authorizes the final
+   remote operation.
+3. Measure electrical key-on to usable PowerTune gauges. Device 1 is observed
+   to boot dramatically faster than the historical Device 0 baseline, but
+   measure before changing services. A dormant module occupying a few MiB is
+   less important than a service consuming hundreds of milliseconds without
+   useful work.
+4. Later, validate a real automotive CAN harness using CAN_H, CAN_L,
+   dedicated CAN_REF and separate shield; proper Omron CAN cable and DTM
+   connectors are expected. Preserve the existing vehicle-testing cautions.
+5. Plan HIVE and WASP before implementation. WASP is a planned scratch-built
+   auxiliary Automotive Signal Processor: define subsystem boundaries,
+   transport-neutral protocol, discovery/configuration, manifests/revisions,
+   normalized signals, state machines, wire formats, failure model, performance
+   budgets, simulation/replay/tests and ADRs first. Provide human-readable
+   plumbing maps for data and command/control from origin through decoding,
+   transformation, ownership and each consumer/recorder. Repository/agent
+   instructions must specify dependency direction, ownership, errors,
+   concurrency, allocation, serialization, testing and architectural-change
+   requirements. Do not start product code as unstructured "vibe coding".
+
+Hardware reality is authoritative. A replacement becomes GOLDEN only after
+source identity and reproducibility are established, physical artifact
+ownership is known, the destination write is verified, cold-power hardware
+passes, PowerTune reaches usable gauges, failures are audited, and the
+source-of-truth docs are updated.
